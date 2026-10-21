@@ -544,13 +544,31 @@ DEFAULT_SOLIDS.register(LayeredHex20Element)
 # ---------------------------------------------------------------------------
 # Structured blocks
 # ---------------------------------------------------------------------------
+def _fractions(n) -> np.ndarray:
+    if np.ndim(n) == 0:
+        if int(n) < 1:
+            raise ValueError("element counts must be >= 1")
+        return np.linspace(0.0, 1.0, int(n) + 1)
+    f = np.asarray(n, dtype=float)
+    if f.size < 2 or abs(f[0]) > 1e-12 or abs(f[-1] - 1.0) > 1e-12 or np.any(np.diff(f) <= 0.0):
+        raise ValueError("node positions must increase from 0 to 1")
+    return f
+
+
+def _at(f: np.ndarray, i: int, step: int) -> float:
+    """Fraction of grid index i (mid-side indices fall half way between corners)."""
+    if step == 1 or i % 2 == 0:
+        return float(f[i // step])
+    return float(0.5 * (f[i // 2] + f[i // 2 + 1]))
+
+
 def solid_block(
     mesh,
     laminate: Laminate,
     length_x: float,
     length_y: float,
-    nx: int,
-    ny: int,
+    nx,
+    ny,
     origin: Sequence[float] = (0.0, 0.0, 0.0),
     element: str = "hex8",
     layers: str = "ply",
@@ -568,6 +586,9 @@ def solid_block(
     element through the whole laminate. Returns a ``NamedMesh`` with node sets
     ``x0``, ``x1``, ``y0``, ``y1``, ``bottom``, ``top`` and ``all`` and element sets
     ``all`` and ``ply<k>`` (ply index k of the laminate).
+
+    ``nx`` and ``ny`` are element counts, or increasing sequences of node positions
+    as fractions from 0 to 1 for graded meshes (for example fine towards free edges).
     """
     from .laminate_mechanics import Ply
     from .laminate_mesh_builders import NamedMesh
@@ -576,8 +597,10 @@ def solid_block(
         raise ValueError("element must be 'hex8' or 'hex20'")
     if layers not in ("ply", "laminate"):
         raise ValueError("layers must be 'ply' or 'laminate'")
-    if nx < 1 or ny < 1 or elements_per_ply < 1:
-        raise ValueError("element counts must be >= 1")
+    fx, fy = _fractions(nx), _fractions(ny)
+    nx, ny = len(fx) - 1, len(fy) - 1
+    if elements_per_ply < 1:
+        raise ValueError("elements_per_ply must be >= 1")
     x0, y0, z0 = (list(origin) + [0.0, 0.0, 0.0])[:3]
     if layers == "ply":
         stacks, owner = [], []
@@ -614,7 +637,7 @@ def solid_block(
             for i in range(imax + 1):
                 if quadratic and (i % 2) + (j % 2) + (k % 2) > 1:
                     continue
-                mesh.add_node(node, (x0 + length_x * i / imax, y0 + length_y * j / jmax, z_of(k)))
+                mesh.add_node(node, (x0 + length_x * _at(fx, i, step), y0 + length_y * _at(fy, j, step), z_of(k)))
                 grid[(i, j, k)] = node
                 node += 1
     element_sets: Dict[str, List[int]] = {"all": []}

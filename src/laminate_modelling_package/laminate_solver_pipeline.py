@@ -289,6 +289,11 @@ class FEAMesh:
         bottoms = {frozenset(e.node_ids[i] for i in e.BOTTOM_FACE) for e in self.solid_elements}
         return {e.element_id for e in self.solid_elements if frozenset(e.node_ids[i] for i in e.TOP_FACE) in bottoms}
 
+    def element_free_nodes(self) -> List[int]:
+        """Nodes no element uses (reference nodes of connections)."""
+        used = {n for e in self._elements.values() for n in e.node_ids}
+        return [n for n in self._nodes if n not in used]
+
     def solid_only_nodes(self) -> List[int]:
         """Nodes used by solids and by no shell: their rotations have no stiffness."""
         solid, shell = set(), set()
@@ -682,14 +687,15 @@ class DenseLinearSolver(LinearSystemSolver):
 class SparseLinearSolver(LinearSystemSolver):
     """Sparse LU factorisation (SuperLU via SciPy).
 
-    ``ordering`` is SuperLU's column ordering; the default minimum-degree ordering on
-    the symmetric structure keeps the fill small for stiffness matrices (solid models
-    in particular factorise many times faster than with COLAMD).
+    ``ordering`` is SuperLU's column ordering. The default minimum-degree ordering of
+    K^T K keeps the fill small for both shell and solid models (on layered solid
+    models it factorises several times faster than COLAMD); pass "COLAMD" for
+    SuperLU's own default.
     """
 
     name = "scipy-sparse"
 
-    def __init__(self, pivot_tolerance: float = 1e-14, ordering: str = "MMD_AT_PLUS_A"):
+    def __init__(self, pivot_tolerance: float = 1e-14, ordering: str = "MMD_ATA"):
         super().__init__(pivot_tolerance)
         self.ordering = ordering
         if not HAVE_SCIPY:
@@ -814,6 +820,15 @@ class ConstraintEliminator:
                 i = mesh.dof_index(node, d)
                 if i not in slaves:
                     prescribed.setdefault(i, 0.0)
+        free_nodes = mesh.element_free_nodes()
+        if free_nodes:  # reference nodes: hold DOFs that no constraint or spring uses
+            used = {mesh.dof_index(*k) for c in bcs.constraints for k, _ in c.masters}
+            used |= {mesh.dof_index(*k) for k in bcs.springs}
+            for node in free_nodes:
+                for d in range(mesh.node_dof_count(node)):
+                    i = mesh.dof_index(node, d)
+                    if i not in slaves and i not in used:
+                        prescribed.setdefault(i, 0.0)
         free = [i for i in range(n) if i not in prescribed and i not in slaves]
         column = {dof: j for j, dof in enumerate(free)}
         g = np.zeros(n)
