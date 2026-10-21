@@ -13,23 +13,24 @@
 ```
 .
 ├── setup.py
-├── run_solver_benchmarks.py
-├── laminate_modelling_package/
-│   ├── __init__.py                     public API
-│   ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
-│   ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
-│   ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
-│   ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
-│   ├── laminate_fea_engine.py          KinematicModel strategies + CompositePlateElement (Quad4)
-│   ├── laminate_stress_recovery.py     ExactStressRecoverer
-│   ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu (Hoffman F12), Hashin 2D/3D
-│   ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
-│   ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
-│   ├── laminate_kernels.py             FEAKernel + Native / CalculiX / Nastran adapters
-│   ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
-│   └── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
-├── examples/                           seven worked examples with figures (see examples/README.md)
-└── tests/                              pytest suite (161 tests)
+├── src/
+│   ├── run_solver_benchmarks.py            benchmark runner (laminate-benchmarks command)
+│   └── laminate_modelling_package/
+│       ├── __init__.py                     public API
+│       ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
+│       ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
+│       ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
+│       ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
+│       ├── laminate_fea_engine.py          KinematicModel strategies + CompositePlateElement (Quad4)
+│       ├── laminate_stress_recovery.py     ExactStressRecoverer
+│       ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu (Hoffman F12), Hashin 2D/3D
+│       ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
+│       ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
+│       ├── laminate_kernels.py             FEAKernel + Native / CalculiX / Nastran adapters
+│       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
+│       └── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
+├── examples/                               seven worked examples with figures (see examples/README.md)
+└── tests/                                  pytest suite (161 tests)
 ```
 
 ## Install
@@ -104,7 +105,7 @@ cross-check. Run them all with `python examples/run_all.py`.
 ## Benchmark runner
 
 ```bash
-python run_solver_benchmarks.py --n 10 --work-dir benchmark_runs
+laminate-benchmarks --n 10 --work-dir benchmark_runs   # installed with pip install -e .
 ```
 
 This builds a simply supported 200 mm square plate with the asymmetric stack `[0/45/-45/90/0/90]` in T300/5208, loaded by 1 kPa pressure and a 50 K cool-down. It then:

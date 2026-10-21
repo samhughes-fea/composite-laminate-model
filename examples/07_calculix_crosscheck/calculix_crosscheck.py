@@ -1,6 +1,6 @@
 """Cross-check the native solver against CalculiX on the benchmark plate.
 
-The model is the one ``run_solver_benchmarks.py`` builds: a simply supported
+The model is the one ``laminate-benchmarks`` builds: a simply supported
 200 mm square plate with the asymmetric stack [0/45/-45/90/0/90] in T300/5208,
 loaded by 1 kPa pressure and a 50 K cool-down. The same ``AnalysisModel`` is
 run through ``NativePythonKernelAdapter`` and ``CalculiXKernelAdapter``.
@@ -20,7 +20,6 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import numpy as np
 

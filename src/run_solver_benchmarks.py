@@ -7,7 +7,7 @@ stack, loaded by a uniform pressure plus a uniform cool-down. Each kernel
 whose executable is missing write their input deck and are reported as skipped.
 
 Usage:
-    python run_solver_benchmarks.py [--n 10] [--pressure 5000] [--delta-t -50]
+    laminate-benchmarks [--n 10] [--pressure 5000] [--delta-t -50]
                                     [--work-dir benchmark_runs] [--ccx ccx] [--nastran nastran]
 """
 

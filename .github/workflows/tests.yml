@@ -24,4 +24,4 @@ jobs:
       - name: Run tests
         run: pytest -q
       - name: Run benchmark
-        run: python run_solver_benchmarks.py --n 6 --work-dir benchmark_runs
+        run: laminate-benchmarks --n 6 --work-dir benchmark_runs

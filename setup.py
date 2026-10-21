@@ -4,6 +4,7 @@ Editable install for development:
     pip install -e .            # core (NumPy only)
     pip install -e .[sparse]    # with SciPy sparse solver
     pip install -e .[dev]       # with SciPy and pytest
+    pip install -e .[examples]  # with SciPy and matplotlib for examples/
 """
 
 from pathlib import Path
@@ -24,7 +25,8 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     url="https://github.com/samhughes-fea/composite-laminate-fea",
-    packages=find_packages(exclude=("tests", "tests.*")),
+    package_dir={"": "src"},
+    packages=find_packages("src"),
     python_requires=">=3.9",
     install_requires=["numpy>=1.22"],
     extras_require={

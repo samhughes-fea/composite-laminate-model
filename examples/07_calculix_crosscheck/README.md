@@ -8,7 +8,7 @@ displacements and ply stresses.
 
 ## The model
 
-The model is the one `run_solver_benchmarks.py` builds:
+The model is the one the `laminate-benchmarks` runner (`src/run_solver_benchmarks.py`) builds:
 
 | Item | Value |
 |---|---|
@@ -67,5 +67,5 @@ python examples/07_calculix_crosscheck/calculix_crosscheck.py
   interfaces. Both solvers give the same stress distribution, which is not
   symmetric about the mid-plane because the stack is unsymmetric.
 
-`python run_solver_benchmarks.py` prints the same comparison as tables, also
+`laminate-benchmarks` prints the same comparison as tables, also
 timing each kernel and adding the Nastran deck.
