@@ -26,11 +26,12 @@
 │       ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu (Hoffman F12), Hashin 2D/3D
 │       ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
 │       ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
+│       ├── laminate_gmsh.py                GmshMeshImporter, GmshPlateBuilder (optional Gmsh meshing)
 │       ├── laminate_kernels.py             FEAKernel + Native / CalculiX / Nastran adapters
 │       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
 │       └── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
 ├── examples/                               seven worked examples with figures (see examples/README.md)
-└── tests/                                  pytest suite (161 tests)
+└── tests/                                  pytest suite
 ```
 
 ## Install
@@ -38,7 +39,8 @@
 ```bash
 pip install -e .            # NumPy only (dense solver)
 pip install -e ".[dev]"     # + SciPy sparse solver and pytest
-pip install -e ".[examples]" # + matplotlib for the examples
+pip install -e ".[gmsh]"     # + Gmsh meshing
+pip install -e ".[examples]" # + matplotlib and Gmsh for the examples
 pytest                      # run the test suite
 ```
 
@@ -93,6 +95,30 @@ ex.to_csv("results/")
 For the bilinear element, moments and stresses are most accurate at element
 centroids (O(h²) convergence); nodal values are smoothed for plotting. See
 [example 03](examples/03_result_fidelity/).
+
+## Meshing with Gmsh
+
+`FEAMesh.rectangular_plate` covers structured rectangles. For anything else,
+mesh the geometry in [Gmsh](https://gmsh.info) and import it. Physical surfaces
+choose the laminate of each region, and every physical group becomes a named
+node set for supports and loads:
+
+```python
+from laminate_modelling_package import CircularHole, GmshMeshImporter, GmshPlateBuilder
+
+importer = GmshMeshImporter({"skin": skin, "doubler": doubler}, FSDTModel())
+gm = importer.from_file("panel.geo")        # or .step / .brep (meshed in quads), or a .msh
+bcs.fix(gm.nodes("clamped_edge"), [DOF.UX, DOF.UY, DOF.UZ])
+
+# A plate with holes, meshed in graded quads straight from Python:
+gm = GmshPlateBuilder(0.3, 0.15, [CircularHole(0.15, 0.075, 0.005)], size=0.012, hole_size=0.0003).build(
+    GmshMeshImporter(laminate, FSDTModel()))
+```
+
+The shell element needs 4-node quads, so set `Mesh.RecombineAll = 1` in your
+own models (the builder and `from_file` do this for geometry files). Gmsh is
+optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
+`libglu1-mesa`. See [example 08](examples/08_open_hole_gmsh/).
 
 ## Examples
 
@@ -170,5 +196,6 @@ The test suite includes:
 ## Limitations
 
 - The analysis is linear and small-deflection.
-- Elements are flat facets. Ply orientations in the CalculiX deck assume shells lying in planes parallel to xy.
+- Elements are flat facets, so curved surfaces are approximated by facets. Ply orientations in the CalculiX deck assume shells lying in planes parallel to xy.
+- Gmsh meshes must be all-quad (4-node). Triangles and higher-order elements are rejected with a clear error.
 - Through-thickness normal stress σ3 is zero in the shell. The 3D failure criteria still accept full 3D stress vectors.

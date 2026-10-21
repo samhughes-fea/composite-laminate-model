@@ -77,6 +77,15 @@ class FEAMesh:
         self._node_order[node_id] = len(self._nodes)
         self._nodes[node_id] = xyz
 
+    def remove_nodes(self, node_ids: Sequence[int]) -> None:
+        """Remove nodes that no element uses and renumber the DOF map."""
+        drop = {int(n) for n in node_ids}
+        used = {n for element in self._elements.values() for n in element.node_ids} & drop
+        if used:
+            raise ValueError(f"Nodes {sorted(used)} are used by elements and cannot be removed")
+        self._nodes = {n: xyz for n, xyz in self._nodes.items() if n not in drop}
+        self._node_order = {n: i for i, n in enumerate(self._nodes)}
+
     @property
     def node_ids(self) -> List[int]:
         return list(self._nodes)

@@ -8,6 +8,7 @@ Environment     HygrothermalProperties, HygrothermalState, HygrothermalEngine
 Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel
 Element         CompositePlateElement (Quad4, 24 DOF)
 Solution        FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
+Meshing         GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
 Results         ResultsExtractor (Gauss point, element, node, ply and global levels)
 Post-processing ExactStressRecoverer, failure criteria, SmearedCrackDegradation,
                 ProgressiveDamageAnalysis
@@ -37,6 +38,15 @@ from .laminate_fea_engine import (
     SectionStiffness,
     integrate_abd,
     shape_functions,
+)
+from .laminate_gmsh import (
+    CircularHole,
+    GmshMesh,
+    GmshMeshImporter,
+    GmshPlateBuilder,
+    GmshSession,
+    GmshUnavailableError,
+    UnsupportedMeshError,
 )
 from .laminate_hygrothermal import HygrothermalEngine, HygrothermalProperties, HygrothermalState
 from .laminate_kernels import (
