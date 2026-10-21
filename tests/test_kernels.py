@@ -170,7 +170,8 @@ def test_calculix_deck_promotes_to_s8r(model, tmp_path):
     n, e = 6, 6
     assert len(deck.midside_nodes) == n * (e + 1) * 2
     assert "*ELEMENT, TYPE=S8R, ELSET=EALL" in text
-    assert "*SHELL SECTION, ELSET=LAM1, COMPOSITE, OFFSET=0." in text
+    assert "*SHELL SECTION, ELSET=SEC1, COMPOSITE, OFFSET=0" in text
+    assert "1, 0, 0, 0, 1, 0" in text  # flat mesh: material axes are global x, y
     assert text.count("*ORIENTATION") == 4
     assert "*EXPANSION, TYPE=ORTHO, ZERO=0." in text and "*TEMPERATURE" in text
     # Mid-side nodes between two simply supported edge nodes are supported too.

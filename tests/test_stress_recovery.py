@@ -58,9 +58,10 @@ def test_off_axis_material_transformation(cfrp):
     assert point.material_stress_3d()[[0, 1, 5]] == pytest.approx([s1, s2, t12])
 
 
-def test_rzt_transverse_shear_is_continuous_in_fe_solution(cfrp):
+def test_condensed_rzt_transverse_shear_is_continuous_in_fe_solution(cfrp):
+    """With the zig-zag amplitude slaved to gamma0, tau = G gamma0 in every ply."""
     lam = Laminate.from_angles(cfrp, [0, 90, 0], 1.0e-3)
-    mesh = FEAMesh.rectangular_plate(0.06, 0.06, 6, 6, lam, RefinedZigZagModel())
+    mesh = FEAMesh.rectangular_plate(0.06, 0.06, 6, 6, lam, RefinedZigZagModel(condensed=True))
     result = StructuralGlobalSolver().solve(mesh, simply_supported(mesh, 0.06, 0.06), LoadCase().add_pressure(1e5))
     element = mesh.elements[1]
     u = result.element_displacements(element.element_id)

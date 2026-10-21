@@ -5,18 +5,19 @@
 1. Gauss point  - generalised strains and section resultants N, M, Q at each
                   integration point; ply stresses and failure indices at any z.
 2. Element      - Gauss-averaged resultants, strain energy split
-                  (membrane / bending / membrane-bending coupling / shear / drilling)
-                  and the worst ply failure index.
+                  (membrane / bending / membrane-bending coupling / enrichment /
+                  shear / drilling) and the worst ply failure index.
 3. Node         - displacements and reactions (exact nodal unknowns); resultants and
-                  ply stresses extrapolated from the Gauss points with a bilinear fit
-                  and averaged over the elements that share each node.
+                  ply stresses extrapolated from the recovery points with each
+                  element's own fit and averaged over the elements sharing each node.
 4. Ply / z      - any of the above evaluated at a chosen ply position.
 5. Global       - total strain energy and its split, external work, applied and
                   reaction force/moment resultants, equilibrium residual, and peak
                   values with their locations.
 
-Gauss points are the most accurate source for stresses (they are where the stiffness
-was integrated); nodal stresses are smoothed for plotting. Section resultants are
+"Gauss points" here are each element's recovery points (2x2 for Quad4 and Quad8,
+three interior points for Tri3). For the bilinear Quad4 the element centroid is the
+most accurate place to read moments; nodal stresses are smoothed for plotting. Section resultants are
 mechanical: [N; M] = ABD [eps0; kappa] - [N_ht; M_ht] and Q = A_s gamma0.
 All strains and resultants are in each element's local shell axes, which coincide
 with global x, y for meshes in the xy-plane.
@@ -32,10 +33,10 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .laminate_failure_criteria import FailureCriterion
-from .laminate_fea_engine import CompositePlateElement, shape_functions
+from .laminate_elements import ShellElement
 from .laminate_hygrothermal import HygrothermalState
 from .laminate_solver_pipeline import LoadCase, SolutionResult
-from .laminate_stress_recovery import ExactStressRecoverer
+from .laminate_stress_recovery import ExactStressRecoverer, StressRecoverer
 
 PLY_POSITIONS = ("bottom", "mid", "top")
 
@@ -88,6 +89,7 @@ class ElementField:
     energy_membrane: np.ndarray
     energy_bending: np.ndarray
     energy_coupling: np.ndarray
+    energy_enrichment: np.ndarray
     energy_shear: np.ndarray
     energy_drilling: np.ndarray
     energy_total: np.ndarray
@@ -143,7 +145,7 @@ class ResultsExtractor:
         self,
         solution: SolutionResult,
         load_case: Optional[LoadCase] = None,
-        recoverer: Optional[ExactStressRecoverer] = None,
+        recoverer: Optional[StressRecoverer] = None,
         criterion: Optional[FailureCriterion] = None,
     ):
         self.solution = solution
@@ -156,17 +158,11 @@ class ResultsExtractor:
         self._plies: Optional[PlyPointField] = None
 
     # ------------------------------------------------------------- helpers
-    def _state(self, element: CompositePlateElement) -> HygrothermalState:
+    def _state(self, element: ShellElement) -> HygrothermalState:
         return self.load_case.state_for(element.element_id)
 
-    def _section_resultants(self, element, eps0, kappa, gamma0):
-        section = element.section
-        N_ht, M_ht = element.hygrothermal_resultants(self._state(element))
-        NM = section.abd @ np.concatenate([eps0, kappa]) - np.concatenate([N_ht, M_ht])
-        return NM[:3], NM[3:], section.shear @ gamma0
-
     @staticmethod
-    def ply_height(element: CompositePlateElement, ply: int, position: str) -> Tuple[float, str]:
+    def ply_height(element: ShellElement, ply: int, position: str) -> Tuple[float, str]:
         """z coordinate and interface side for a ply position: 'bottom', 'mid', 'top' or a float in [0, 1]."""
         z_b, z_t = element.laminate.ply_bounds()[ply]
         if position == "bottom":
@@ -187,9 +183,11 @@ class ResultsExtractor:
         rows = {k: [] for k in ("eid", "idx", "nat", "xyz", "w", "e", "k", "g", "N", "M", "Q")}
         for element in self.mesh.elements:
             u = self.solution.element_displacements(element.element_id)
+            state = self._state(element)
             for i, (xi, eta, w) in enumerate(element.gauss_points()):
-                eps0, kappa, gamma0 = element.generalized_strains(u, xi, eta)
-                N, M, Q = self._section_resultants(element, eps0, kappa, gamma0)
+                e, s = element.strain_state(u, xi, eta)
+                eps0, kappa, gamma0 = e[:3], e[3:6], s[:2]
+                N, M, Q = element.section_resultants(e, s, state)
                 for key, value in zip(rows, (element.element_id, i, (xi, eta), element.global_coordinates(xi, eta), w, eps0, kappa, gamma0, N, M, Q)):
                     rows[key].append(value)
         a = {k: np.array(v) for k, v in rows.items()}
@@ -239,7 +237,7 @@ class ResultsExtractor:
         ids = self.mesh.element_ids
         n = len(ids)
         res = {k: np.zeros((n, d)) for k, d in (("N", 3), ("M", 3), ("Q", 2), ("c", 3))}
-        energy = {k: np.zeros(n) for k in ("mem", "bend", "coup", "shear", "drill", "total")}
+        energy = {k: np.zeros(n) for k in ("membrane", "bending", "coupling", "enrichment", "shear", "drilling", "total")}
         area = np.zeros(n)
         fi = np.full(n, np.nan)
         crit = np.full(n, -1, dtype=int)
@@ -251,16 +249,9 @@ class ResultsExtractor:
             res["N"][j] = w @ gp.N[mask] / area[j]
             res["M"][j] = w @ gp.M[mask] / area[j]
             res["Q"][j] = w @ gp.Q[mask] / area[j]
-            s = element.section
-            e0, k0, g0 = gp.eps0[mask], gp.kappa[mask], gp.gamma0[mask]
-            energy["mem"][j] = 0.5 * np.sum(w * np.einsum("ni,ij,nj->n", e0, s.A, e0))
-            energy["bend"][j] = 0.5 * np.sum(w * np.einsum("ni,ij,nj->n", k0, s.D, k0))
-            energy["coup"][j] = np.sum(w * np.einsum("ni,ij,nj->n", e0, s.B, k0))
-            energy["shear"][j] = 0.5 * np.sum(w * np.einsum("ni,ij,nj->n", g0, s.shear, g0))
             u = self.solution.element_displacements(element.element_id)
-            u_local = element.transformation @ u
-            drill = sum(wt * (element.drilling_B(xi, eta) @ u_local) ** 2 for xi, eta, wt in element.gauss_points())
-            energy["drill"][j] = 0.5 * element.drilling_modulus * drill
+            for key, value in element.energy_split(u).items():
+                energy[key][j] = value
             energy["total"][j] = element.strain_energy(u)
         if self.criterion is not None:
             pp = self.ply_points()
@@ -271,21 +262,21 @@ class ResultsExtractor:
                 crit[j] = pp.ply_index[mask][k]
         self._elements = ElementField(
             np.array(ids), res["c"], area, res["N"], res["M"], res["Q"],
-            energy["mem"], energy["bend"], energy["coup"], energy["shear"], energy["drill"], energy["total"], fi, crit,
+            energy["membrane"], energy["bending"], energy["coupling"], energy["enrichment"], energy["shear"],
+            energy["drilling"], energy["total"], fi, crit,
         )
         return self._elements
 
     # ---------------------------------------------------------- nodal level
     def _average_to_nodes(self, values_by_element: Dict[int, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        """values_by_element[eid] has shape (n_gauss, k); returns node-averaged (n_nodes, k) and counts."""
+        """values_by_element[eid] has shape (n_recovery, k); returns node-averaged (n_nodes, k) and counts."""
         node_ids = self.mesh.node_ids
         index = {n: i for i, n in enumerate(node_ids)}
         width = next(iter(values_by_element.values())).shape[1]
         total = np.zeros((len(node_ids), width))
         count = np.zeros(len(node_ids))
         for element in self.mesh.elements:
-            pts = [(xi, eta) for xi, eta, _ in element.gauss_points()]
-            corner_values = extrapolation_matrix(pts) @ values_by_element[element.element_id]
+            corner_values = element.extrapolation_matrix() @ values_by_element[element.element_id]
             for local, nid in enumerate(element.node_ids):
                 total[index[nid]] += corner_values[local]
                 count[index[nid]] += 1
@@ -301,7 +292,7 @@ class ResultsExtractor:
         sol = self.solution
         return NodalField(
             np.array(self.mesh.node_ids), self.mesh.coordinates_array(),
-            sol.displacement_array(), sol.reactions.reshape(-1, 6).copy(),
+            sol.displacement_array(), sol.reaction_array(),
             averaged[:, :3], averaged[:, 3:6], averaged[:, 6:8], count.astype(int),
         )
 
@@ -324,7 +315,7 @@ class ResultsExtractor:
     # --------------------------------------------------------- global level
     def _resultant(self, vector: np.ndarray) -> np.ndarray:
         xyz = self.mesh.coordinates_array()
-        v = vector.reshape(-1, 6)
+        v = self.mesh.standard_array(vector)
         force = v[:, :3].sum(axis=0)
         moment = (np.cross(xyz, v[:, :3]) + v[:, 3:]).sum(axis=0)
         return np.concatenate([force, moment])
@@ -335,12 +326,13 @@ class ResultsExtractor:
             "membrane": float(el.energy_membrane.sum()),
             "bending": float(el.energy_bending.sum()),
             "coupling": float(el.energy_coupling.sum()),
+            "enrichment": float(el.energy_enrichment.sum()),
             "shear": float(el.energy_shear.sum()),
             "drilling": float(el.energy_drilling.sum()),
         }
         applied = self._resultant(self.solution.load_vector)
         reaction = self._resultant(self.solution.reactions)
-        forces = self.solution.load_vector.reshape(-1, 6)[:, :3]
+        forces = self.solution.load_array()[:, :3]
         scale = max(np.abs(forces).sum(), np.linalg.norm(reaction[:3]), 1e-300)
         length = max(np.ptp(self.mesh.coordinates_array(), axis=0).max(), 1e-300)
         imbalance = applied + reaction

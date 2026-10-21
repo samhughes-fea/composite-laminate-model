@@ -5,10 +5,13 @@ Public API overview
 Materials       ElasticProperties3D, StrengthProperties3D, MaterialCard, MaterialLibrary
 Geometry        Ply, Laminate
 Environment     HygrothermalProperties, HygrothermalState, HygrothermalEngine
-Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel
-Element         CompositePlateElement (Quad4, 24 DOF)
-Solution        FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
-Meshing         GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
+Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel (full or condensed)
+Elements        ShellElement: Quad4ShellElement (alias CompositePlateElement), Tri3ShellElement,
+                Quad8ShellElement; ElementRegistry
+Orientation     FixedDirection, CylindricalDirection, FieldDirection
+Solution        FEAMesh, BoundaryConditions, LoadCase, LoadCombination, StructuralGlobalSolver
+Meshing         RectangularPlateBuilder, CylindricalPanelBuilder, GmshPlateBuilder,
+                GmshMeshImporter (optional gmsh dependency)
 Results         ResultsExtractor (Gauss point, element, node, ply and global levels)
 Post-processing ExactStressRecoverer, failure criteria, SmearedCrackDegradation,
                 ProgressiveDamageAnalysis
@@ -27,18 +30,32 @@ from .laminate_failure_criteria import (
     TsaiWuCriterion,
     create_criterion,
 )
-from .laminate_fea_engine import (
-    CLPTModel,
+from .laminate_elements import (
+    DEFAULT_ELEMENTS,
     CompositePlateElement,
+    ElementRegistry,
+    Quad4ShellElement,
+    Quad8ShellElement,
+    ShellElement,
+    Tri3ShellElement,
+    shape_functions,
+)
+from .laminate_kinematics import (
+    CLPTModel,
     FSDTModel,
+    GeneralizedSection,
     KinematicModel,
     LayerwiseModel,
     LayerwiseThicknessMatrices,
     RefinedZigZagModel,
+    SectionModel,
     SectionStiffness,
+    ThroughThicknessBasis,
+    ThroughThicknessRecovery,
     integrate_abd,
-    shape_functions,
 )
+from .laminate_mesh_builders import CylindricalPanelBuilder, NamedMesh, RectangularPlateBuilder
+from .laminate_orientation import CylindricalDirection, FieldDirection, FixedDirection
 from .laminate_gmsh import (
     CircularHole,
     GmshMesh,
@@ -49,7 +66,7 @@ from .laminate_gmsh import (
     UnsupportedMeshError,
 )
 from .laminate_hygrothermal import HygrothermalEngine, HygrothermalProperties, HygrothermalState
-from .laminate_kernels import (
+from .kernels import (
     AnalysisModel,
     CalculiXDeckWriter,
     CalculiXKernelAdapter,
@@ -102,7 +119,12 @@ from .laminate_progressive_damage import (
 )
 from .laminate_solver_pipeline import (
     DOF,
+    BodyLoad,
     BoundaryConditions,
+    EnrichedDOF,
+    LineLoad,
+    LoadCombination,
+    combine_solutions,
     ConstraintEliminator,
     DenseLinearSolver,
     FEAMesh,
@@ -124,7 +146,7 @@ from .laminate_results import (
     ResultsExtractor,
     extrapolation_matrix,
 )
-from .laminate_stress_recovery import ExactStressRecoverer, PointStressState
+from .laminate_stress_recovery import ExactStressRecoverer, PointStressState, StressRecoverer
 
 __version__ = "1.0.0"
 

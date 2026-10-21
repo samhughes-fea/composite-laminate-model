@@ -156,11 +156,19 @@ class Ply:
 # Laminate
 # ---------------------------------------------------------------------------
 class Laminate:
-    """Immutable ordered stack of plies, bottom to top, centred on the mid-plane."""
+    """Immutable ordered stack of plies, bottom to top.
 
-    __slots__ = ("_plies", "_name", "_z")
+    ``offset`` is the height of the laminate mid-plane above the element reference
+    surface (Nastran ZOFFS). The default 0 puts the reference surface on the
+    mid-plane; ``offset = h/2`` puts it on the bottom face (a skin laid up on a tool),
+    ``offset = -h/2`` on the top face. Every z coordinate in the package is measured
+    from the reference surface, so ``z_interfaces`` runs from ``offset - h/2`` to
+    ``offset + h/2``.
+    """
 
-    def __init__(self, plies: Sequence[Ply], name: str = ""):
+    __slots__ = ("_plies", "_name", "_z", "_offset")
+
+    def __init__(self, plies: Sequence[Ply], name: str = "", offset: float = 0.0):
         plies = tuple(plies)
         if not plies:
             raise ValueError("A laminate needs at least one ply")
@@ -169,16 +177,19 @@ class Laminate:
         self._plies = plies
         self._name = name
         thicknesses = np.array([p.thickness for p in plies])
-        z = np.concatenate([[0.0], np.cumsum(thicknesses)]) - 0.5 * thicknesses.sum()
+        if not np.isfinite(offset):
+            raise ValueError("offset must be finite")
+        self._offset = float(offset)
+        z = np.concatenate([[0.0], np.cumsum(thicknesses)]) - 0.5 * thicknesses.sum() + self._offset
         z.setflags(write=False)
         self._z = z
 
     @classmethod
     def from_angles(
-        cls, material: MaterialCard, angles: Iterable[float], ply_thickness: float, name: str = ""
+        cls, material: MaterialCard, angles: Iterable[float], ply_thickness: float, name: str = "", offset: float = 0.0
     ) -> "Laminate":
         angles = list(angles)
-        return cls([Ply(material, ply_thickness, a) for a in angles], name or cls._sequence(angles))
+        return cls([Ply(material, ply_thickness, a) for a in angles], name or cls._sequence(angles), offset)
 
     @staticmethod
     def _sequence(angles: Sequence[float]) -> str:
@@ -186,6 +197,19 @@ class Laminate:
 
     plies = property(lambda self: self._plies)
     name = property(lambda self: self._name or self.stacking_sequence)
+    offset = property(lambda self: self._offset)
+
+    @property
+    def mid_plane(self) -> float:
+        """z of the laminate mid-plane (equal to ``offset``)."""
+        return self._offset
+
+    def with_offset(self, offset: float) -> "Laminate":
+        return Laminate(self._plies, self._name, offset)
+
+    def with_plies(self, plies: Sequence[Ply]) -> "Laminate":
+        """Same name and offset, new plies (used by degradation and temperature updates)."""
+        return Laminate(plies, self._name, self._offset)
 
     @property
     def stacking_sequence(self) -> str:
@@ -244,7 +268,7 @@ class Laminate:
     def replace_ply(self, index: int, ply: Ply) -> "Laminate":
         plies = list(self._plies)
         plies[index] = ply
-        return Laminate(plies, self._name)
+        return Laminate(plies, self._name, self._offset)
 
     def areal_density(self) -> float:
         return float(sum(p.material.density * p.thickness for p in self._plies))
@@ -256,4 +280,5 @@ class Laminate:
         return iter(self._plies)
 
     def __repr__(self) -> str:
-        return f"Laminate({self.stacking_sequence}, h={self.thickness:g})"
+        extra = f", offset={self._offset:g}" if self._offset else ""
+        return f"Laminate({self.stacking_sequence}, h={self.thickness:g}{extra})"
