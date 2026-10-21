@@ -1,11 +1,23 @@
 # composite-laminate-fea
 
-`laminate_modelling_package` is a Python suite for composite laminate mechanics, from thin plates to thick laminates:
+`laminate_modelling_package` is a Python suite for the linear static analysis of
+composite blade structures (wind and tidal turbine blades, helicopter blades and
+aircraft wings: sandwich and monolithic skins, spar caps and shear webs), built on
+general laminate mechanics from thin plates to thick laminates:
 
+- a blade section builder: airfoils, chordwise skin regions, spar caps and shear webs,
+  twist, taper and pitch axis, and beam section properties (4 × 4 stiffness, shear,
+  tension and mass centres) extracted from the shell model
+- ply books: laminates defined ply by ply over element sets, with ply drops and
+  per-ply results
 - 3D orthotropic materials, plies and laminates, with temperature-dependent properties
 - four kinematic theories: CLPT, FSDT, refined zig-zag (RZT) and layerwise, the
   last two with their own zig-zag / interface DOFs
-- Tri3, Quad4 and Quad8 composite shell elements behind one `ShellElement` interface
+- Tri3, Quad4 and Quad8 composite shell elements, and curved Quad8 / Tri6 shells,
+  behind one `ShellElement` interface
+- layered Hex8 / Hex20 solids for 3D detail (ply drops, bonded joints), tied into a
+  shell model
+- rigid (RBE2) and distributing (RBE3) links for load introduction and measurement
 - material orientation on curved shells, laminate offsets, springs and skew supports
 - pressure fields, line loads, body loads and hygrothermal (thermal and moisture) loads;
   many load cases with one factorisation, and load combinations
@@ -14,6 +26,7 @@
 - Pagano's exact 3D solution as a built-in benchmark
 - structured and Gmsh meshing, and pre-solve model checks
 - pluggable solver kernels: native NumPy/SciPy, CalculiX and MSC/NX Nastran
+- ParaView (VTK) export of the model and of every ply
 
 ```
 .
@@ -29,6 +42,11 @@
 │       ├── laminate_temperature.py         TemperatureDependentMaterial
 │       ├── laminate_kinematics.py          CLPT, FSDT, RZT, layerwise; generalised section matrices
 │       ├── laminate_elements.py            ShellElement, Tri3 / Quad4 / Quad8 shells, ElementRegistry
+│       ├── laminate_curved_shell.py        curved Quad8 / Tri6 shells (normals from the surface)
+│       ├── laminate_solid.py               layered Hex8 / Hex20 solids, solid_block, shell-solid coupling
+│       ├── laminate_blade.py               Airfoil, Station, BladeBuilder, beam_section_properties
+│       ├── laminate_connectors.py          reference nodes, rigid_link (RBE2), distributing_link (RBE3)
+│       ├── laminate_layup.py               PlyDefinition, Layup: ply books, ply drops, per-ply results
 │       ├── laminate_orientation.py         FixedDirection, CylindricalDirection, FieldDirection
 │       ├── laminate_fea_engine.py          compatibility imports for the two modules above
 │       ├── laminate_stress_recovery.py     StressRecoverer, ExactStressRecoverer
@@ -43,8 +61,9 @@
 │       ├── kernels/                        FEAKernel + Native / CalculiX / Nastran adapters and deck writers
 │       ├── laminate_kernels.py             compatibility imports for kernels/
 │       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
-│       └── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
-├── examples/                               twenty worked examples with figures (see examples/README.md)
+│       ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
+│       └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
+├── examples/                               twenty-three worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -90,6 +109,78 @@ for p in profile:
         p.material_stress_3d(), laminate.plies[p.ply_index].material.strength).index)
 ```
 
+## Blade structures
+
+`BladeBuilder` meshes a blade or wing segment from stations along the span. Each
+station gives a chord, an airfoil, a twist and a pitch axis; skin regions are
+chordwise bands of the surface and webs sit at chord fractions. Laminates are
+given by region name, with `_ss` / `_ps` suffixes where the suction and pressure
+sides differ:
+
+```python
+from laminate_modelling_package import (
+    Airfoil, BladeBuilder, FSDTModel, ShearWeb, SkinRegion, Station, beam_section_properties)
+
+stations = [Station(0.0, 1.2, Airfoil.naca4("0024"), pitch_axis=0.35),
+            Station(10.0, 0.6, Airfoil.naca4("0018"), twist=-6.0, pitch_axis=0.35)]
+regions = [SkinRegion("le_panel", 0.0, 0.2, 4), SkinRegion("spar_cap", 0.2, 0.5, 6),
+           SkinRegion("te_panel", 0.5, 1.0, 8)]
+webs = [ShearWeb("web_fwd", 0.2, 4), ShearWeb("web_aft", 0.5, 4)]
+blade = BladeBuilder(stations, regions, webs, n_span=40).build(
+    {"le_panel": sandwich, "te_panel": sandwich, "spar_cap": cap, "web_fwd": web, "web_aft": web}, FSDTModel())
+
+bcs = BoundaryConditions().clamp(blade.nodes("root"))
+props = beam_section_properties(blade)   # of a prismatic segment
+props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_coupling
+```
+
+- **Geometry.** z is the span, x the chord (leading to trailing edge) and y the
+  thickness, with the pitch axis at x = 0. `Airfoil.naca4(code)`, `Airfoil.ellipse(t)`
+  or `Airfoil(points)` for any coordinates (Selig order), splined so nodes are spaced
+  evenly along the arc. Blunt trailing edges get a closing web.
+- **Laminates.** Skin normals point outwards and skins grow inwards from the outer
+  mould line (`skin_reference="outer"`); the 0° direction follows the span.
+  Different angles on the two caps give bend-twist or extension-twist coupling.
+- **Sets.** Element sets per region and side (`spar_cap_ss`, `te_panel`, `skin`,
+  `webs`, ...) and node sets (`root`, `tip`, `le`, `te`, each web) for loads,
+  supports and results.
+- **Elements.** `element="quad4"`, `"quad8"` or `"quad8_curved"`.
+
+`add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
+section loads from an aeroelastic code into the model, and measure section motion.
+See examples [20](examples/20_blade_beam_properties/),
+[21](examples/21_spar_cap_ply_drops/) and [23](examples/23_blade_segment/).
+
+## Ply books, solids and ParaView
+
+```python
+from laminate_modelling_package import Layup, PlyDefinition, solid_block, couple_shell_to_solid, write_vtu
+
+plies = [PlyDefinition("cap_12", glass, 1.0e-3, 0.0, elements="spar_cap", region=lambda x: x[2] < 4.0), ...]
+layup = Layup(plies, reference="top")
+layup.apply(mesh, blade.element_sets)
+layup.check_drops(mesh, max_per_step=2, element_sets=blade.element_sets)
+worst = layup.ply_failure(solution, TsaiWuCriterion())     # per named ply
+
+block = solid_block(mesh, laminate, 0.01, 0.01, 14, 2, element="hex20")   # layered solids
+couple_shell_to_solid(mesh, bcs, shell_edge_nodes, block.nodes("x0"))
+
+write_vtu("out/blade", solution, TsaiWuCriterion(), layered=True)   # model and one cell per ply
+```
+
+- **Layups.** Plies are listed from the inside out; each covers an element set,
+  optionally cut by a region function. Every element gets the stack of plies over
+  it, `drops` lists the edges where plies stop and `ply_table` gives each ply's
+  area and mass.
+- **Solids.** `LayeredHex8Element` (with incompatible modes) and
+  `LayeredHex20Element` take a laminate through their thickness and give the full
+  3D stress state. `merge_coincident_nodes` joins solid blocks and
+  `couple_shell_to_solid` ties shell edges to solid faces. See
+  [example 22](examples/22_ply_drop_solid_detail/).
+- **ParaView.** `write_vtu` writes the deformed model with displacements, stress
+  resultants and failure indices, plus a second file with one cell per ply,
+  offset through the thickness; `write_pvd` collects several load cases.
+
 ## Results at every level
 
 `ResultsExtractor` turns a solution into arrays at each level of fidelity:
@@ -130,12 +221,10 @@ See [example 02](examples/02_through_thickness_stresses/) and
 ## Elements, orientation and loads
 
 ```python
-from laminate_modelling_package import (
-    CylindricalDirection, CylindricalPanelBuilder, LoadCombination, RectangularPlateBuilder)
+from laminate_modelling_package import BladeBuilder, LoadCombination, RectangularPlateBuilder
 
 mesh = RectangularPlateBuilder(0.4, 0.2, 20, 10, element="quad8").build(laminate, RefinedZigZagModel())
-barrel = CylindricalPanelBuilder(0.15, 0.6, 8, 32, 0.0, 360.0).build_named(
-    laminate, FSDTModel(), material_axis=CylindricalDirection(reference="axial"))
+blade = BladeBuilder(stations, regions, webs, material_axis=(0.0, 0.0, 1.0))   # 0° along the span (default)
 
 bcs.add_spring([node], [DOF.UZ], 5e5).fix_direction(edge_nodes, (1.0, 1.0, 0.0))
 cases = [LoadCase("dead").add_body_load((0, 0, -9.81)),
@@ -145,8 +234,8 @@ results = StructuralGlobalSolver().solve_combinations(
     mesh, bcs, cases, [LoadCombination("ULS", {"dead": 1.35, "wind": 1.5, "tip": 1.0})])
 ```
 
-- **Elements.** `"tri3"`, `"quad4"` (default) and `"quad8"` everywhere a mesh is
-  built; `FEAMesh.add_element` picks the type from the node count, and new
+- **Elements.** `"tri3"`, `"quad4"` (default), `"quad8"`, and the curved
+  `"quad8_curved"` and `"tri6"`, everywhere a mesh is built; `FEAMesh.add_element` picks the type from the node count, and new
   element classes plug in through `ElementRegistry`.
 - **Orientation.** `material_axis` (a vector, `CylindricalDirection`, or
   `FieldDirection(f)`) sets each element's 0° direction; by default it is the
@@ -157,9 +246,8 @@ results = StructuralGlobalSolver().solve_combinations(
 - **Checks.** `ModelChecker().check(mesh, bcs)` reports distorted or warped
   elements, CLPT on thick plates, likely unit mix-ups and missing supports.
 
-See [example 18](examples/18_pressure_vessel_winding/),
-[example 19](examples/19_element_comparison/) and
-[example 20](examples/20_load_combinations/).
+See [example 18](examples/18_element_comparison/) and
+[example 19](examples/19_load_combinations/).
 
 ## Meshing with Gmsh
 
@@ -189,13 +277,15 @@ optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 
 ## Examples
 
-[`examples/`](examples/) holds twenty worked examples, each in its own folder
-with a script, its figures and a README that walks through the model. They
-cover the kinematic theories, through-thickness stresses, result fidelity,
-hygrothermal loads, failure criteria and envelopes, progressive damage, Gmsh
-meshing, sandwich panels, bending-twist coupling, design sweeps, solver scaling,
-a CalculiX cross-check, the Pagano 3D benchmark, a wound pressure vessel, the
-three element types and load combinations. Run them all with `python examples/run_all.py`.
+[`examples/`](examples/) holds twenty-three worked examples, each in its own folder
+with a script, its figures and a README that walks through the model. Examples
+01–19 cover the laminate mechanics underneath: the kinematic theories,
+through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
+and envelopes, progressive damage, Gmsh meshing, sandwich panels, bending-twist
+coupling, design sweeps, solver scaling, a CalculiX cross-check, the Pagano 3D
+benchmark, the element types and load combinations. Examples 20–23 are blade
+structures: beam properties and bend-twist tailoring, spar cap ply drops, the 3D
+stresses at a ply drop, and a sandwich blade segment checked against a beam. Run them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
@@ -265,13 +355,16 @@ The test suite includes:
 - Free thermal warping of unsymmetric laminates, which matches ABD⁻¹{N_ht; M_ht} exactly, with self-equilibrated residual stresses.
 - Classical-laminate-theory ply stresses for laminates in tension.
 - First-ply failure of a [0/90]s laminate in tension at the CLT-predicted load.
+- Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
+- Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
 
 ## Limitations
 
 - The analysis is linear and small-deflection.
-- Elements are flat facets, so curved surfaces are approximated by facets. Elements warped by more than 5% of their size raise a warning.
-- Gmsh cells other than Tri3, Quad4 and Quad8 (for example 6-node triangles or 9-node quads) are rejected with a clear error.
-- The shell itself carries no through-thickness normal strain, so σ3 comes only from `EquilibriumStressRecoverer` (post-processing), and progressive damage uses the constitutive ply stresses.
+- Tri3, Quad4 and Quad8 are flat facets (warped elements raise a warning); use `quad8_curved` or `tri6` where curvature matters. Tri6 still shows some membrane locking on strongly curved shells.
+- Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
+- The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
+- `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time.
 - Equilibrium recovery assumes the hygrothermal state is constant within each element, and is least accurate right at supports and free edges, where it falls back on the element shear force.
 - Tri3 is markedly stiffer than Quad4 for the same mesh; use it to fill regions that cannot take quads.

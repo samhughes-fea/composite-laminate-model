@@ -1,4 +1,4 @@
-# 19 · Tri3, Quad4 and Quad8 on the open-hole plate
+# 18 · Tri3, Quad4 and Quad8 on the open-hole plate
 
 The package has three shell elements behind one `ShellElement` interface. This
 example meshes the quasi-isotropic open-hole plate of example 08 with each of
@@ -20,7 +20,7 @@ with Lekhnitskii's solution.
 | Reference | Lekhnitskii Kt for an infinite orthotropic plate × finite-width correction = 3.01 |
 
 ```bash
-python examples/19_element_comparison/element_comparison.py
+python examples/18_element_comparison/element_comparison.py
 ```
 
 ## Walkthrough

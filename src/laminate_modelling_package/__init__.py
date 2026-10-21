@@ -175,6 +175,7 @@ from .laminate_solid import (
     SolidPoint,
     SolidRegistry,
     couple_shell_to_solid,
+    merge_coincident_nodes,
     solid_block,
 )
 from .laminate_vtk import VTKExporter, write_pvd, write_vtu

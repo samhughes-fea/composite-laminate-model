@@ -1,4 +1,4 @@
-# 20 · Load cases and combinations
+# 19 · Load cases and combinations
 
 Design checks need many load cases and factored combinations of them. This
 example applies the four kinds of distributed load the solver supports to a
@@ -20,7 +20,7 @@ design combinations by superposition.
 | `cold` | uniform ΔT = −50 K |
 
 ```bash
-python examples/20_load_combinations/load_combinations.py
+python examples/19_load_combinations/load_combinations.py
 ```
 
 ## Walkthrough

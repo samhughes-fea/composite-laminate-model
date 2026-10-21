@@ -673,14 +673,66 @@ def solid_block(
 # ---------------------------------------------------------------------------
 # Coupling
 # ---------------------------------------------------------------------------
+def _shell_node_normals(mesh, nodes: Sequence[int]) -> np.ndarray:
+    """Mean normal of the shell elements around each node (zero vector for nodes on no shell)."""
+    acc = {int(n): np.zeros(3) for n in nodes}
+    for e in getattr(mesh, "shell_elements", mesh.elements):
+        for n in e.node_ids:
+            if n in acc:
+                acc[n] += np.asarray(e.frame)[2]
+    out = np.array([acc[int(n)] for n in nodes])
+    norm = np.linalg.norm(out, axis=1)
+    out[norm > 0] /= norm[norm > 0][:, None]
+    return out
+
+
+def merge_coincident_nodes(mesh, *named, tol: float = 1e-9) -> Dict[int, int]:
+    """Merge nodes of layered solids that share a position (to join blocks built separately).
+
+    Solids are rebuilt on the kept node (the first one); nodes that become unused are
+    removed, and the node sets of any ``NamedMesh`` passed in ``named`` are renumbered.
+    Shell elements are left alone (join shells to solids with ``couple_shell_to_solid``).
+    Returns {removed node: kept node}.
+    """
+    ids = mesh.node_ids
+    X = mesh.coordinates_array()
+    scale = max(float(np.ptp(X, axis=0).max()), 1e-300)
+    keys = np.round(X / (tol * scale)).astype(np.int64)
+    first: Dict[tuple, int] = {}
+    mapping: Dict[int, int] = {}
+    for n, k in zip(ids, map(tuple, keys)):
+        if k in first:
+            mapping[n] = first[k]
+        else:
+            first[k] = n
+    if not mapping:
+        return {}
+    shell_nodes = {n for e in mesh.shell_elements for n in e.node_ids}
+    clash = [n for n in mapping if n in shell_nodes]
+    if clash:
+        raise ValueError(f"Nodes {clash[:8]} are used by shells; merge only solid nodes")
+    for e in mesh.solid_elements:
+        if any(n in mapping for n in e.node_ids):
+            new = [mapping.get(n, n) for n in e.node_ids]
+            mesh.replace_element(type(e)(e.element_id, new, e.coordinates, e.laminate, material_axis=e.material_axis,
+                                         hygrothermal_engine=e.hygrothermal_engine, gradient_origin=e.gradient_origin))
+    mesh.remove_nodes(list(mapping))
+    for nm in named:
+        for key, nodes in nm.node_sets.items():
+            nm.node_sets[key] = list(dict.fromkeys(mapping.get(n, n) for n in nodes))
+    return mapping
+
+
 def couple_shell_to_solid(mesh, bcs, shell_nodes: Iterable[int], solid_nodes: Iterable[int],
                           max_distance: Optional[float] = None, require_all: bool = True) -> Dict[int, int]:
     """Tie each solid node to the nearest shell node with rigid shell kinematics.
 
     u_solid = u_shell + theta_shell x (x_solid - x_shell), one constraint per
-    translation. Solid nodes that are also shell nodes are skipped (they already share
-    DOFs). Returns {solid node: shell node}. ``max_distance`` guards against pairing a
-    solid node with a far-away shell node.
+    translation. Each solid node pairs with the shell node it sits above or below (the
+    nearest across the shell normal), so offset laminates and thick stacks pair
+    correctly. Solid nodes that are also shell nodes are skipped (they already share
+    DOFs). Returns {solid node: shell node}. ``max_distance`` limits the distance across
+    the normal.
 
     Every shell node on the interface needs a column of solid nodes, otherwise its
     rotations are free and the joint acts as a hinge there: use Quad4 shells with Hex8
@@ -691,15 +743,19 @@ def couple_shell_to_solid(mesh, bcs, shell_nodes: Iterable[int], solid_nodes: It
     if not shell_nodes:
         raise ValueError("No shell nodes to couple to")
     S = np.array([mesh.node_coordinates(n) for n in shell_nodes])
+    normals = _shell_node_normals(mesh, shell_nodes)
     pairs = {}
     for j in (int(n) for n in solid_nodes):
         if j in shell_nodes:
             continue
         xj = mesh.node_coordinates(j)
-        d = np.linalg.norm(S - xj, axis=1)
-        k = int(np.argmin(d))
-        if max_distance is not None and d[k] > max_distance:
-            raise ValueError(f"Solid node {j} is {d[k]:.3g} from the nearest shell node (limit {max_distance:.3g})")
+        d = xj - S
+        # distance across the shell normal: a solid node pairs with the shell node it sits above or below
+        along = np.einsum("ij,ij->i", d, normals)
+        dist = np.linalg.norm(d - along[:, None] * normals, axis=1)
+        k = int(np.argmin(dist + 1e-9 * np.abs(along)))
+        if max_distance is not None and dist[k] > max_distance:
+            raise ValueError(f"Solid node {j} is {dist[k]:.3g} from the nearest shell node (limit {max_distance:.3g})")
         s = shell_nodes[k]
         r = xj - S[k]
         # u_j = u_s + theta x r
@@ -719,5 +775,5 @@ def couple_shell_to_solid(mesh, bcs, shell_nodes: Iterable[int], solid_nodes: It
 
 __all__ = [
     "SolidPoint", "LayeredSolidElement", "LayeredHex8Element", "LayeredHex20Element", "SolidRegistry",
-    "DEFAULT_SOLIDS", "couple_shell_to_solid", "solid_block",
+    "DEFAULT_SOLIDS", "couple_shell_to_solid", "solid_block", "merge_coincident_nodes",
 ]
