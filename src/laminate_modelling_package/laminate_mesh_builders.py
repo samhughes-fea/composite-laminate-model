@@ -5,7 +5,9 @@ sets for the edges, so boundary conditions and line loads can be applied by name
 General geometry is meshed with Gmsh (``laminate_gmsh``).
 
 ``element`` selects the element type: ``"quad4"`` (default), ``"tri3"`` (each cell
-split along its diagonal) or ``"quad8"`` (mid-side nodes added).
+split along its diagonal), ``"quad8"`` (flat 8-node), ``"quad8_curved"`` (curved
+8-node shell) or ``"tri6"`` (curved 6-node triangles). Quadratic elements put their
+mid-side nodes on the exact geometry, so the curved elements follow it.
 """
 
 from __future__ import annotations
@@ -40,6 +42,9 @@ class NamedMesh:
             raise KeyError(f"No element set '{name}'. Available: {', '.join(self.element_sets)}") from exc
 
 
+ELEMENT_CHOICES = ("quad4", "tri3", "quad8", "quad8_curved", "tri6")
+
+
 def _structured(
     nu: int,
     nv: int,
@@ -49,36 +54,57 @@ def _structured(
     element: str,
     edge_names: Tuple[str, str, str, str],
     element_options: dict,
+    periodic_u: bool = False,
 ) -> NamedMesh:
-    """Mesh the parameter square [0, 1]^2 mapped by ``point(s, t)``; edges named (s=0, s=1, t=0, t=1)."""
+    """Mesh the parameter square [0, 1]^2 mapped by ``point(s, t)``; edges named (s=0, s=1, t=0, t=1).
+
+    ``periodic_u`` closes the mesh in s (s = 1 is s = 0), for full barrels; the s
+    edges then have no names.
+    """
     from .laminate_solver_pipeline import FEAMesh
 
     if nu < 1 or nv < 1:
         raise ValueError("the number of elements in each direction must be >= 1")
-    if element not in ("quad4", "tri3", "quad8"):
-        raise ValueError("element must be 'quad4', 'tri3' or 'quad8'")
+    if element not in ELEMENT_CHOICES:
+        raise ValueError(f"element must be one of {', '.join(ELEMENT_CHOICES)}")
+    if periodic_u and nu < 3:
+        raise ValueError("a closed mesh needs at least 3 elements around")
     mesh = FEAMesh()
-    step = 2 if element == "quad8" else 1
+    quadratic = element in ("quad8", "quad8_curved", "tri6")
+    step = 2 if quadratic else 1
+    imax, jmax = step * nu, step * nv
     grid: Dict[Tuple[int, int], int] = {}
     node = 1
-    for j in range(step * nv + 1):
-        for i in range(step * nu + 1):
-            if step == 2 and i % 2 == 1 and j % 2 == 1:
+    for j in range(jmax + 1):
+        for i in range(imax + (0 if periodic_u else 1)):
+            if element in ("quad8", "quad8_curved") and i % 2 == 1 and j % 2 == 1:
                 continue  # serendipity: no centre node
-            mesh.add_node(node, point(i / (step * nu), j / (step * nv)))
+            mesh.add_node(node, point(i / imax, j / jmax))
             grid[(i, j)] = node
             node += 1
+
+    def g(i, j):
+        return grid[(i % imax if periodic_u else i, j)]
+
+    element_type = "quad8_curved" if element == "quad8_curved" else None
     eid = 1
     for j in range(nv):
         for i in range(nu):
-            if element == "quad8":
+            if quadratic:
                 a, b = 2 * i, 2 * j
-                conn = [grid[(a, b)], grid[(a + 2, b)], grid[(a + 2, b + 2)], grid[(a, b + 2)],
-                        grid[(a + 1, b)], grid[(a + 2, b + 1)], grid[(a + 1, b + 2)], grid[(a, b + 1)]]
-                mesh.add_element(eid, conn, laminate, kinematics, **element_options)
-                eid += 1
+                if element == "tri6":
+                    mesh.add_element(eid, [g(a, b), g(a + 2, b), g(a + 2, b + 2), g(a + 1, b), g(a + 2, b + 1),
+                                           g(a + 1, b + 1)], laminate, kinematics, **element_options)
+                    mesh.add_element(eid + 1, [g(a, b), g(a + 2, b + 2), g(a, b + 2), g(a + 1, b + 1),
+                                               g(a + 1, b + 2), g(a, b + 1)], laminate, kinematics, **element_options)
+                    eid += 2
+                else:
+                    conn = [g(a, b), g(a + 2, b), g(a + 2, b + 2), g(a, b + 2),
+                            g(a + 1, b), g(a + 2, b + 1), g(a + 1, b + 2), g(a, b + 1)]
+                    mesh.add_element(eid, conn, laminate, kinematics, element_type=element_type, **element_options)
+                    eid += 1
                 continue
-            n1, n2, n3, n4 = grid[(i, j)], grid[(i + 1, j)], grid[(i + 1, j + 1)], grid[(i, j + 1)]
+            n1, n2, n3, n4 = g(i, j), g(i + 1, j), g(i + 1, j + 1), g(i, j + 1)
             if element == "quad4":
                 mesh.add_element(eid, (n1, n2, n3, n4), laminate, kinematics, **element_options)
                 eid += 1
@@ -86,13 +112,12 @@ def _structured(
                 mesh.add_element(eid, (n1, n2, n3), laminate, kinematics, **element_options)
                 mesh.add_element(eid + 1, (n1, n3, n4), laminate, kinematics, **element_options)
                 eid += 2
-    imax, jmax = step * nu, step * nv
-    sets = {
-        edge_names[0]: [n for (i, j), n in grid.items() if i == 0],
-        edge_names[1]: [n for (i, j), n in grid.items() if i == imax],
-        edge_names[2]: [n for (i, j), n in grid.items() if j == 0],
-        edge_names[3]: [n for (i, j), n in grid.items() if j == jmax],
-    }
+    sets = {}
+    if not periodic_u:
+        sets[edge_names[0]] = [n for (i, j), n in grid.items() if i == 0]
+        sets[edge_names[1]] = [n for (i, j), n in grid.items() if i == imax]
+    sets[edge_names[2]] = [n for (i, j), n in grid.items() if j == 0]
+    sets[edge_names[3]] = [n for (i, j), n in grid.items() if j == jmax]
     sets["all"] = list(grid.values())
     return NamedMesh(mesh, sets, {"all": mesh.element_ids})
 
@@ -156,29 +181,12 @@ class CylindricalPanelBuilder:
         return named
 
     def _closed(self, laminate, kinematics, element_options) -> NamedMesh:
-        from .laminate_solver_pipeline import FEAMesh
+        def point(s, t):
+            phi = np.radians(self.phi_start + 360.0 * s)
+            return np.array([t * self.length, self.radius * np.cos(phi), self.radius * np.sin(phi)])
 
-        if self.element != "quad4":
-            raise ValueError("closed barrels are built with quad4 elements")
-        mesh = FEAMesh()
-        n_c, n_a = self.n_hoop, self.n_axial
-        ids = {}
-        node = 1
-        for j in range(n_a + 1):
-            for i in range(n_c):
-                phi = np.radians(self.phi_start + 360.0 * i / n_c)
-                mesh.add_node(node, (j * self.length / n_a, self.radius * np.cos(phi), self.radius * np.sin(phi)))
-                ids[(i, j)] = node
-                node += 1
-        eid = 1
-        for j in range(n_a):
-            for i in range(n_c):
-                k = (i + 1) % n_c
-                mesh.add_element(eid, (ids[(i, j)], ids[(k, j)], ids[(k, j + 1)], ids[(i, j + 1)]),
-                                 laminate, kinematics, **element_options)
-                eid += 1
-        sets = {"x0": [ids[(i, 0)] for i in range(n_c)], "x1": [ids[(i, n_a)] for i in range(n_c)], "all": list(ids.values())}
-        return NamedMesh(mesh, sets, {"all": mesh.element_ids})
+        return _structured(self.n_hoop, self.n_axial, point, laminate, kinematics, self.element,
+                           ("phi0", "phi1", "x0", "x1"), element_options, periodic_u=True)
 
     def build(self, laminate: Laminate, kinematics: KinematicModel, **element_options):
         return self.build_named(laminate, kinematics, **element_options).mesh

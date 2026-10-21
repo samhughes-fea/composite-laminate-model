@@ -97,18 +97,19 @@ def test_physical_surfaces_select_laminates_and_msh_round_trip(cfrp, tmp_path):
     assert reread.mesh.n_nodes == gm.mesh.n_nodes and len(reread.mesh.elements) == len(gm.mesh.elements)
 
 
-def test_second_order_triangles_are_rejected_and_unmapped_regions_need_a_default(cfrp):
+def test_nine_node_quads_are_rejected_and_unmapped_regions_need_a_default(cfrp):
     lam = Laminate.from_angles(cfrp, [0], 0.25e-3)
     with GmshSession() as gmsh:
         gmsh.clear()
         s = gmsh.model.occ.addRectangle(0, 0, 0, 0.1, 0.1)
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [s], name="panel")
-        gmsh.option.setNumber("Mesh.RecombineAll", 0)
+        gmsh.option.setNumber("Mesh.RecombineAll", 1)
         gmsh.option.setNumber("Mesh.ElementOrder", 2)
+        gmsh.option.setNumber("Mesh.SecondOrderIncomplete", 0)
         gmsh.option.setNumber("Mesh.MeshSizeMax", 0.05)
         gmsh.model.mesh.generate(2)
-        with pytest.raises(UnsupportedMeshError, match="6-node triangle"):
+        with pytest.raises(UnsupportedMeshError, match="9-node quadrangle"):
             GmshMeshImporter(lam, FSDTModel()).from_model()
         gmsh.option.setNumber("Mesh.ElementOrder", 1)
         gmsh.option.setNumber("Mesh.RecombineAll", 1)
@@ -122,7 +123,7 @@ def test_second_order_triangles_are_rejected_and_unmapped_regions_need_a_default
 
 @pytest.mark.parametrize(
     "element, counts",
-    [("tri3", {3}), ("quad8", {8}), ("quad_dominant", {3, 4}), ("quad4", {4})],
+    [("tri3", {3}), ("quad8", {8}), ("quad8_curved", {8}), ("tri6", {6}), ("quad_dominant", {3, 4}), ("quad4", {4})],
 )
 def test_builder_element_choices_import_and_carry_tension(cfrp, element, counts):
     lam = Laminate.from_angles(cfrp, [0, 90, 90, 0], 0.25e-3)
@@ -130,6 +131,8 @@ def test_builder_element_choices_import_and_carry_tension(cfrp, element, counts)
     found = {len(e.node_ids) for e in gm.mesh.elements}
     assert found <= counts and (found & counts)
     assert all(e.frame[2][2] > 0.999 for e in gm.mesh.elements)
+    if element in ("quad8_curved", "tri6"):
+        assert {e.TOPOLOGY for e in gm.mesh.elements} == {element}
     mesh = gm.mesh
     bcs = BoundaryConditions().fix(mesh.node_ids, [DOF.UZ, DOF.RX, DOF.RY])
     bcs.fix(gm.nodes("left"), [DOF.UX]).fix([gm.nodes("left")[0]], [DOF.UY])
@@ -144,7 +147,7 @@ def test_builder_element_choices_import_and_carry_tension(cfrp, element, counts)
 
 def test_unknown_element_choice_is_rejected():
     with pytest.raises(ValueError, match="element must be one of"):
-        GmshPlateBuilder(0.1, 0.05, element="tri6")
+        GmshPlateBuilder(0.1, 0.05, element="hex8")
 
 
 def test_remove_nodes_keeps_the_dof_map_consistent(cfrp):

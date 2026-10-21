@@ -91,7 +91,7 @@ class EquilibriumStressRecoverer(StressRecoverer):
             around: Dict[int, list] = {}
             edges: Dict[tuple, int] = {}
             vertices = set()
-            for element in self.mesh.elements:
+            for element in self.mesh.shell_elements:
                 for nid in element.node_ids:
                     around.setdefault(nid, []).append(element)
                 vertices.update(element.node_ids[: element.N_CORNERS])
@@ -99,7 +99,7 @@ class EquilibriumStressRecoverer(StressRecoverer):
                     key = tuple(sorted((element.node_ids[edge[0]], element.node_ids[edge[-1]])))
                     edges[key] = edges.get(key, 0) + 1
             boundary = {n for key, c in edges.items() if c == 1 for n in key}
-            for element in self.mesh.elements:  # mid-side nodes of boundary edges
+            for element in self.mesh.shell_elements:  # mid-side nodes of boundary edges
                 for edge in element.EDGES:
                     key = tuple(sorted((element.node_ids[edge[0]], element.node_ids[edge[-1]])))
                     if edges[key] == 1:
@@ -119,7 +119,7 @@ class EquilibriumStressRecoverer(StressRecoverer):
         """
         around, interior = self._topology()
         samples = {}
-        for element in self.mesh.elements:
+        for element in self.mesh.shell_elements:
             pts = np.array([element.global_coordinates(xi, eta) for xi, eta, _ in element.recovery_rule()])
             samples[element.element_id] = (pts, np.asarray(values_at_points(element), dtype=float))
 
@@ -350,7 +350,7 @@ class EquilibriumStressRecoverer(StressRecoverer):
     def critical_interface(self, criterion: Optional[FailureCriterion] = None, points=None) -> InterfaceCheck:
         """The highest delamination index over all elements (at the element recovery points)."""
         worst = None
-        for element in self.solution.mesh.elements:
+        for element in self.solution.mesh.shell_elements:
             sample = points if points is not None else [tuple(p[:2]) for p in element.gauss_points()]
             for xi, eta in sample:
                 for check in self.interface_checks(element, xi, eta, criterion):

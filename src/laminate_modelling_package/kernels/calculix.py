@@ -29,7 +29,7 @@ from .decks import DeckCatalogue, equivalent_alphas, equivalent_nodal_forces, eq
 
 # corner-pair edges that receive inserted mid-side nodes, per native topology
 _MIDSIDE_EDGES = {"quad4": ((0, 1), (1, 2), (2, 3), (3, 0)), "tri3": ((0, 1), (1, 2), (2, 0))}
-_CCX_TYPE = {"quad4": "S8R", "quad8": "S8R", "tri3": "S6"}
+_CCX_TYPE = {"quad4": "S8R", "quad8": "S8R", "quad8_curved": "S8R", "tri3": "S6", "tri6": "S6"}
 
 
 @dataclass
@@ -45,7 +45,7 @@ class CalculiXDeckWriter:
 
     CalculiX only accepts ``*SHELL SECTION, COMPOSITE`` on S8R/S6 elements, so every
     Quad4 is promoted to an S8R and every Tri3 to an S6 by inserting shared mid-side
-    nodes; Quad8 elements are written as S8R directly. Inserted mid-side nodes inherit a
+    nodes; Quad8 (flat or curved) and Tri6 elements are written as S8R and S6 directly. Inserted mid-side nodes inherit a
     prescribed DOF when both corner nodes of the edge prescribe it (value = average).
     Each ply orientation is a rectangular system whose first two axes are the element's
     material axes (the projection of its ``material_axis``), rotated by the ply angle
@@ -66,8 +66,8 @@ class CalculiXDeckWriter:
             topo = element.TOPOLOGY
             if topo not in _CCX_TYPE:
                 raise UnsupportedFeatureError(f"CalculiX decks do not support '{topo}' elements")
-            if topo == "quad8":
-                connectivity["S8R"][element.element_id] = list(n)
+            if topo not in _MIDSIDE_EDGES:  # already quadratic: written directly
+                connectivity[_CCX_TYPE[topo]][element.element_id] = list(n)
                 continue
             mids = []
             for a, b in _MIDSIDE_EDGES[topo]:

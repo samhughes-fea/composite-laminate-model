@@ -27,6 +27,8 @@ from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, 
 import numpy as np
 
 from .laminate_elements import DEFAULT_ELEMENTS, STANDARD_DOFS, ElementRegistry, ShellElement
+from . import laminate_curved_shell as _curved  # noqa: F401  (registers the curved elements)
+from . import laminate_solid as _solid
 from .laminate_hygrothermal import NULL_STATE, HygrothermalEngine, HygrothermalState
 from .laminate_kinematics import KinematicModel
 from .laminate_mechanics import Laminate
@@ -78,21 +80,26 @@ class SingularStiffnessError(RuntimeError):
 # Mesh
 # ---------------------------------------------------------------------------
 class FEAMesh:
-    """Nodes and shell elements with a global DOF map.
+    """Nodes, shell elements and layered solid elements with a global DOF map.
 
-    Elements are created by an ``ElementRegistry`` (Quad4, Tri3 and Quad8 by default,
-    chosen by node count), so new element types plug in without touching the mesh.
+    Shells are created by an ``ElementRegistry`` (Quad4, Tri3 and Quad8 by default,
+    chosen by node count; curved Quad8 and Tri6 by name), so new element types plug in
+    without touching the mesh. Layered solids (Hex8, Hex20) are added with
+    ``add_solid``. Every node carries the six shell DOFs; the rotations of nodes used
+    only by solids have no stiffness and are held at zero by the solver.
     """
 
     def __init__(
         self,
         hygrothermal_engine: Optional[HygrothermalEngine] = None,
         element_registry: Optional[ElementRegistry] = None,
+        solid_registry=None,
     ):
         self._nodes: Dict[int, np.ndarray] = {}
         self._elements: Dict[int, ShellElement] = {}
         self.hygrothermal_engine = hygrothermal_engine or HygrothermalEngine()
         self.element_registry = element_registry or DEFAULT_ELEMENTS
+        self.solid_registry = solid_registry or _solid.DEFAULT_SOLIDS
         self._layout: Optional[Tuple[Dict[int, int], Dict[int, int], int]] = None
 
     # ---------------------------------------------------------------- nodes
@@ -231,6 +238,64 @@ class FEAMesh:
         self._layout = None
         return element
 
+    def add_solid(
+        self,
+        element_id: int,
+        node_ids: Sequence[int],
+        laminate: Laminate,
+        element_type: Optional[str] = None,
+        material_axis=None,
+        gradient_origin: Optional[float] = None,
+    ):
+        """Add a layered solid ("hex8" or "hex20", inferred from the node count).
+
+        The plies of ``laminate`` stack from the bottom face (nodes 0-3) to the top face
+        (nodes 4-7); ply angles are measured from ``material_axis`` (global x by default)
+        about the stack direction. ``gradient_origin`` is the height (on the laminate's z
+        axis) about which through-thickness temperature gradients act, for elements that
+        hold part of a thicker laminate; it defaults to the element laminate mid-plane.
+        """
+        element_id = int(element_id)
+        if element_id in self._elements:
+            raise ValueError(f"Element {element_id} already exists")
+        missing = [n for n in node_ids if n not in self._nodes]
+        if missing:
+            raise KeyError(f"Element {element_id} references unknown nodes {missing}")
+        cls = self.solid_registry.resolve(len(node_ids), element_type)
+        coords = np.array([self._nodes[n] for n in node_ids])
+        element = cls(element_id, node_ids, coords, laminate, material_axis=material_axis,
+                      hygrothermal_engine=self.hygrothermal_engine, gradient_origin=gradient_origin)
+        self._elements[element_id] = element
+        self._layout = None
+        return element
+
+    @property
+    def shell_elements(self) -> List[ShellElement]:
+        return [e for e in self._elements.values() if not getattr(e, "IS_SOLID", False)]
+
+    @property
+    def solid_elements(self) -> list:
+        return [e for e in self._elements.values() if getattr(e, "IS_SOLID", False)]
+
+    @property
+    def has_solids(self) -> bool:
+        return any(getattr(e, "IS_SOLID", False) for e in self._elements.values())
+
+    def covered_solids(self) -> set:
+        """Ids of solids whose top face is the bottom face of another solid.
+
+        A mesh-wide pressure acts on shells and on the exposed top faces of solids only.
+        """
+        bottoms = {frozenset(e.node_ids[i] for i in e.BOTTOM_FACE) for e in self.solid_elements}
+        return {e.element_id for e in self.solid_elements if frozenset(e.node_ids[i] for i in e.TOP_FACE) in bottoms}
+
+    def solid_only_nodes(self) -> List[int]:
+        """Nodes used by solids and by no shell: their rotations have no stiffness."""
+        solid, shell = set(), set()
+        for e in self._elements.values():
+            (solid if getattr(e, "IS_SOLID", False) else shell).update(e.node_ids)
+        return sorted(solid - shell)
+
     def insert_element(self, element: ShellElement) -> ShellElement:
         """Add an element built elsewhere (its nodes must already exist)."""
         if element.element_id in self._elements:
@@ -285,7 +350,7 @@ class FEAMesh:
         return np.array([offsets[n] + k for n in element.node_ids for k in range(d)], dtype=int)
 
     def copy(self) -> "FEAMesh":
-        clone = FEAMesh(self.hygrothermal_engine, self.element_registry)
+        clone = FEAMesh(self.hygrothermal_engine, self.element_registry, self.solid_registry)
         clone._nodes = {k: v.copy() for k, v in self._nodes.items()}
         clone._elements = dict(self._elements)
         return clone
@@ -615,19 +680,25 @@ class DenseLinearSolver(LinearSystemSolver):
 
 
 class SparseLinearSolver(LinearSystemSolver):
-    """Sparse LU factorisation (SuperLU via SciPy)."""
+    """Sparse LU factorisation (SuperLU via SciPy).
+
+    ``ordering`` is SuperLU's column ordering; the default minimum-degree ordering on
+    the symmetric structure keeps the fill small for stiffness matrices (solid models
+    in particular factorise many times faster than with COLAMD).
+    """
 
     name = "scipy-sparse"
 
-    def __init__(self, pivot_tolerance: float = 1e-14):
+    def __init__(self, pivot_tolerance: float = 1e-14, ordering: str = "MMD_AT_PLUS_A"):
         super().__init__(pivot_tolerance)
+        self.ordering = ordering
         if not HAVE_SCIPY:
             raise ImportError("SparseLinearSolver requires SciPy")
 
     def factorize(self, K):
         K = _sp.csc_matrix(K)
         try:
-            lu = _spla.splu(K)
+            lu = _spla.splu(K, permc_spec=self.ordering)
         except RuntimeError as exc:  # exactly singular
             raise SingularStiffnessError("Stiffness matrix is singular; check the constraints") from exc
         self._check_pivots(lu.U.diagonal())
@@ -673,11 +744,17 @@ class GlobalAssembler:
         np.add.at(K, (rows, cols), vals)
         return K
 
-    def element_load_vector(self, element: ShellElement, load_case: LoadCase) -> np.ndarray:
-        """Distributed loads on one element (pressure, body, hygrothermal) in global DOFs."""
+    def element_load_vector(self, element: ShellElement, load_case: LoadCase, exposed: bool = True) -> np.ndarray:
+        """Distributed loads on one element (pressure, body, hygrothermal) in global DOFs.
+
+        ``exposed=False`` marks a solid whose top face is covered by another solid: it
+        takes only the pressures listed for it, not the mesh-wide pressure.
+        """
         F = np.zeros(element.n_dof)
-        if load_case.has_pressure(element.element_id):
-            F += element.pressure_load_vector(load_case.pressure_on(element.element_id))
+        pressure = load_case.pressure_on(element.element_id) if exposed else \
+            load_case.element_pressures.get(element.element_id, 0.0)
+        if callable(pressure) or pressure != 0.0:
+            F += element.pressure_load_vector(pressure)
         for body in load_case.body_loads:
             if body.applies_to(element.element_id):
                 F += element.body_load_vector(body.acceleration)
@@ -706,8 +783,10 @@ class GlobalAssembler:
         F = np.zeros(mesh.n_dof)
         for (node, dof), value in load_case.nodal_loads.items():
             F[mesh.dof_index(node, dof)] += value
+        covered = mesh.covered_solids() if mesh.has_solids else set()
         for element in mesh.elements:
-            F[mesh.element_dofs(element)] += self.element_load_vector(element, load_case)
+            F[mesh.element_dofs(element)] += self.element_load_vector(
+                element, load_case, element.element_id not in covered)
         if load_case.line_loads:
             F += self.line_load_vector(mesh, load_case)
         return F
@@ -730,6 +809,11 @@ class ConstraintEliminator:
             if s in slaves:
                 raise ValueError(f"DOF {c.slave} is the slave of more than one constraint")
             slaves[s] = c
+        for node in mesh.solid_only_nodes():  # rotations without stiffness
+            for d in (3, 4, 5):
+                i = mesh.dof_index(node, d)
+                if i not in slaves:
+                    prescribed.setdefault(i, 0.0)
         free = [i for i in range(n) if i not in prescribed and i not in slaves]
         column = {dof: j for j, dof in enumerate(free)}
         g = np.zeros(n)

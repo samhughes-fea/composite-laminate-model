@@ -112,13 +112,13 @@ class NastranDeck:
     ply_heights: Dict[int, np.ndarray]
 
 
-_CARD = {"quad4": "CQUAD4", "tri3": "CTRIA3", "quad8": "CQUAD8"}
+_CARD = {"quad4": "CQUAD4", "tri3": "CTRIA3", "quad8": "CQUAD8", "quad8_curved": "CQUAD8", "tri6": "CTRIA6"}
 
 
 class NastranDeckWriter:
     """Writes SOL 101 bulk data.
 
-    Cards: GRID, CQUAD4 / CTRIA3 / CQUAD8, PCOMP, MAT8, CORD2R (material axes), SPC1/SPC,
+    Cards: GRID, CQUAD4 / CTRIA3 / CQUAD8 / CTRIA6, PCOMP, MAT8, CORD2R (material axes), SPC1/SPC,
     MPC, CELAS2 (springs), FORCE, MOMENT, PLOAD2, TEMPD and TEMPP1. Elements whose
     material axis is the projection of global x use MCID 0; others reference a CORD2R
     whose x axis is the element's material axis. Laminate offsets become PCOMP Z0.
