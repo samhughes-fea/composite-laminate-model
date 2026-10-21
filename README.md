@@ -30,7 +30,7 @@
 │       ├── laminate_kernels.py             FEAKernel + Native / CalculiX / Nastran adapters
 │       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
 │       └── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
-├── examples/                               seven worked examples with figures (see examples/README.md)
+├── examples/                               sixteen worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -122,11 +122,12 @@ optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 
 ## Examples
 
-[`examples/`](examples/) holds seven worked examples, each in its own folder
-with a script, its figures and a README that walks through the model: kinematic
-models against thickness, through-thickness stresses, result fidelity levels,
-thermal warping, failure envelopes, progressive damage and a CalculiX
-cross-check. Run them all with `python examples/run_all.py`.
+[`examples/`](examples/) holds sixteen worked examples, each in its own folder
+with a script, its figures and a README that walks through the model. They
+cover the kinematic theories, through-thickness stresses, result fidelity,
+hygrothermal loads, failure criteria and envelopes, progressive damage, Gmsh
+meshing, sandwich panels, bending-twist coupling, design sweeps, solver scaling
+and a CalculiX cross-check. Run them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
