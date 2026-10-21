@@ -2,7 +2,8 @@
 
 Public API overview
 -------------------
-Materials       ElasticProperties3D, StrengthProperties3D, MaterialCard, MaterialLibrary
+Materials       ElasticProperties3D, StrengthProperties3D, MaterialCard, MaterialLibrary,
+                TemperatureDependentMaterial
 Geometry        Ply, Laminate
 Environment     HygrothermalProperties, HygrothermalState, HygrothermalEngine
 Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel (full or condensed)
@@ -13,10 +14,12 @@ Solution        FEAMesh, BoundaryConditions, LoadCase, LoadCombination, Structur
 Meshing         RectangularPlateBuilder, CylindricalPanelBuilder, GmshPlateBuilder,
                 GmshMeshImporter (optional gmsh dependency)
 Results         ResultsExtractor (Gauss point, element, node, ply and global levels)
-Post-processing ExactStressRecoverer, failure criteria, SmearedCrackDegradation,
-                ProgressiveDamageAnalysis
+Post-processing ExactStressRecoverer, EquilibriumStressRecoverer (sigma_z and interlaminar
+                shear from 3D equilibrium), failure criteria (register_criterion,
+                DelaminationOnsetCriterion), SmearedCrackDegradation, ProgressiveDamageAnalysis
 Kernels         NativePythonKernelAdapter, CalculiXKernelAdapter, NastranKernelAdapter
-Verification    StressDistributionVerifier
+Verification    StressDistributionVerifier, PaganoPlate (exact 3D cross-ply solution),
+                ModelChecker (pre-solve checks)
 """
 
 from .laminate_benchmark_stress import DistributionErrorStatistics, StressDistributionVerifier, ThicknessProfile
@@ -24,12 +27,19 @@ from .laminate_failure_criteria import (
     FailureCriterion,
     FailureMode,
     FailureResult,
+    DelaminationOnsetCriterion,
     HashinCriterion,
     MaximumStressCriterion,
     TsaiHillCriterion,
     TsaiWuCriterion,
+    available_criteria,
     create_criterion,
+    register_criterion,
 )
+from .laminate_elasticity_3d import PaganoPlate, PaganoProfile
+from .laminate_equilibrium import EquilibriumStressRecoverer, InterfaceCheck
+from .laminate_model_check import ModelChecker, ModelIssue, ModelReport
+from .laminate_temperature import TemperatureDependentMaterial, apply_operating_temperature, laminate_at_temperature
 from .laminate_elements import (
     DEFAULT_ELEMENTS,
     CompositePlateElement,

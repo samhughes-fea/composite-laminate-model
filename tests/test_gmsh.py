@@ -97,7 +97,7 @@ def test_physical_surfaces_select_laminates_and_msh_round_trip(cfrp, tmp_path):
     assert reread.mesh.n_nodes == gm.mesh.n_nodes and len(reread.mesh.elements) == len(gm.mesh.elements)
 
 
-def test_triangles_are_rejected_and_unmapped_regions_need_a_default(cfrp):
+def test_second_order_triangles_are_rejected_and_unmapped_regions_need_a_default(cfrp):
     lam = Laminate.from_angles(cfrp, [0], 0.25e-3)
     with GmshSession() as gmsh:
         gmsh.clear()
@@ -105,10 +105,12 @@ def test_triangles_are_rejected_and_unmapped_regions_need_a_default(cfrp):
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [s], name="panel")
         gmsh.option.setNumber("Mesh.RecombineAll", 0)
+        gmsh.option.setNumber("Mesh.ElementOrder", 2)
         gmsh.option.setNumber("Mesh.MeshSizeMax", 0.05)
         gmsh.model.mesh.generate(2)
-        with pytest.raises(UnsupportedMeshError, match="RecombineAll"):
+        with pytest.raises(UnsupportedMeshError, match="6-node triangle"):
             GmshMeshImporter(lam, FSDTModel()).from_model()
+        gmsh.option.setNumber("Mesh.ElementOrder", 1)
         gmsh.option.setNumber("Mesh.RecombineAll", 1)
         gmsh.model.mesh.clear()
         gmsh.model.mesh.generate(2)
@@ -116,6 +118,33 @@ def test_triangles_are_rejected_and_unmapped_regions_need_a_default(cfrp):
             GmshMeshImporter({"other": lam}, FSDTModel()).from_model()
         flipped = GmshMeshImporter(lam, FSDTModel(), reference_normal=(0, 0, -1)).from_model()
     assert all(e.frame[2][2] < -0.999 for e in flipped.mesh.elements)
+
+
+@pytest.mark.parametrize(
+    "element, counts",
+    [("tri3", {3}), ("quad8", {8}), ("quad_dominant", {3, 4}), ("quad4", {4})],
+)
+def test_builder_element_choices_import_and_carry_tension(cfrp, element, counts):
+    lam = Laminate.from_angles(cfrp, [0, 90, 90, 0], 0.25e-3)
+    gm = GmshPlateBuilder(0.1, 0.05, size=0.01, element=element).build(GmshMeshImporter(lam, FSDTModel()))
+    found = {len(e.node_ids) for e in gm.mesh.elements}
+    assert found <= counts and (found & counts)
+    assert all(e.frame[2][2] > 0.999 for e in gm.mesh.elements)
+    mesh = gm.mesh
+    bcs = BoundaryConditions().fix(mesh.node_ids, [DOF.UZ, DOF.RX, DOF.RY])
+    bcs.fix(gm.nodes("left"), [DOF.UX]).fix([gm.nodes("left")[0]], [DOF.UY])
+    loads = LoadCase().add_line_load(gm.nodes("right"), (1.0e5, 0.0, 0.0))
+    solution = StructuralGlobalSolver().solve(mesh, bcs, loads)
+    A = FSDTModel().abd_matrix(lam)[:3, :3]
+    strain = np.linalg.solve(A, [1.0e5, 0.0, 0.0])[0]
+    right = gm.nodes("right")
+    ux = np.mean([solution.node_displacement(n)[0] for n in right])
+    assert ux == pytest.approx(strain * 0.1, rel=2e-3)
+
+
+def test_unknown_element_choice_is_rejected():
+    with pytest.raises(ValueError, match="element must be one of"):
+        GmshPlateBuilder(0.1, 0.05, element="tri6")
 
 
 def test_remove_nodes_keeps_the_dof_map_consistent(cfrp):
