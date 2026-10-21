@@ -30,6 +30,7 @@ setup(
     extras_require={
         "sparse": ["scipy>=1.8"],
         "dev": ["scipy>=1.8", "pytest>=7"],
+        "examples": ["scipy>=1.8", "matplotlib>=3.5"],
     },
     entry_points={"console_scripts": ["laminate-benchmarks=run_solver_benchmarks:cli"]},
     py_modules=["run_solver_benchmarks"],

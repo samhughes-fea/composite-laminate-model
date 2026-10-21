@@ -8,6 +8,7 @@ Environment     HygrothermalProperties, HygrothermalState, HygrothermalEngine
 Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel
 Element         CompositePlateElement (Quad4, 24 DOF)
 Solution        FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
+Results         ResultsExtractor (Gauss point, element, node, ply and global levels)
 Post-processing ExactStressRecoverer, failure criteria, SmearedCrackDegradation,
                 ProgressiveDamageAnalysis
 Kernels         NativePythonKernelAdapter, CalculiXKernelAdapter, NastranKernelAdapter
@@ -103,6 +104,15 @@ from .laminate_solver_pipeline import (
     SolutionResult,
     SparseLinearSolver,
     StructuralGlobalSolver,
+)
+from .laminate_results import (
+    ElementField,
+    GaussPointField,
+    GlobalTotals,
+    NodalField,
+    PlyPointField,
+    ResultsExtractor,
+    extrapolation_matrix,
 )
 from .laminate_stress_recovery import ExactStressRecoverer, PointStressState
 

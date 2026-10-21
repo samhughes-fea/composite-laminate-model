@@ -565,10 +565,25 @@ class CompositePlateElement:
         return self.membrane_B(dNdx) @ T, self.bending_B(dNdx) @ T, self.shear_B(xi, eta) @ T
 
     # ------------------------------------------------------------ matrices
+    @property
+    def drilling_modulus(self) -> float:
+        """Penalty modulus (force per length) tying theta_z to the in-plane rotation."""
+        A = self.section.A
+        return self.drilling_factor * max(A[2, 2], np.max(np.abs(A)) * 1e-6)
+
+    def gauss_points(self) -> list:
+        """[(xi, eta, weight * detJ)] for the element's integration rule."""
+        return [(xi, eta, w * self.jacobian(xi, eta)[1]) for xi, eta, w in self._gauss_points_weights()]
+
+    def global_coordinates(self, xi: float, eta: float) -> np.ndarray:
+        """Global position of the natural point (xi, eta) (bilinear map of the corner nodes)."""
+        N, _ = shape_functions(xi, eta)
+        return N @ self.coordinates
+
     def local_stiffness_matrix(self) -> np.ndarray:
         section = self.section
         K = np.zeros((24, 24))
-        drill_modulus = self.drilling_factor * max(section.A[2, 2], np.max(np.abs(section.A)) * 1e-6)
+        drill_modulus = self.drilling_modulus
         for xi, eta, w in self._gauss_points_weights():
             _, detJ, dNdx = self.jacobian(xi, eta)
             B_mb = np.vstack([self.membrane_B(dNdx), self.bending_B(dNdx)])

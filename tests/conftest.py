@@ -78,3 +78,17 @@ def navier_fsdt_centre(D: np.ndarray, As: np.ndarray, a: float, b: float, q: flo
             W = np.linalg.solve(K, np.array([qmn, 0.0, 0.0]))[0]
             w += W * np.sin(m * np.pi / 2) * np.sin(n * np.pi / 2)
     return w
+
+
+def navier_clpt_centre_moments(D: np.ndarray, a: float, b: float, q: float, terms: int = 199) -> np.ndarray:
+    """Centre bending moments [Mx, My] of the simply supported specially orthotropic plate (Navier)."""
+    Mx = My = 0.0
+    for m in range(1, terms + 1, 2):
+        for n in range(1, terms + 1, 2):
+            al, be = m * np.pi / a, n * np.pi / b
+            W = 16 * q / (np.pi**2 * m * n) / (D[0, 0] * al**4 + 2 * (D[0, 1] + 2 * D[2, 2]) * al**2 * be**2 + D[1, 1] * be**4)
+            s = np.sin(m * np.pi / 2) * np.sin(n * np.pi / 2)
+            # kappa = -w,xx etc. for w = W sin sin  ->  kx = al^2 W s, ky = be^2 W s
+            Mx += (D[0, 0] * al**2 + D[0, 1] * be**2) * W * s
+            My += (D[0, 1] * al**2 + D[1, 1] * be**2) * W * s
+    return np.array([Mx, My])

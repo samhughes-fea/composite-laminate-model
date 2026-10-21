@@ -26,8 +26,10 @@
 │   ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
 │   ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
 │   ├── laminate_kernels.py             FEAKernel + Native / CalculiX / Nastran adapters
-│   └── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
-└── tests/                              pytest suite (154 tests)
+│   ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
+│   └── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
+├── examples/                           seven worked examples with figures (see examples/README.md)
+└── tests/                              pytest suite (161 tests)
 ```
 
 ## Install
@@ -35,6 +37,7 @@
 ```bash
 pip install -e .            # NumPy only (dense solver)
 pip install -e ".[dev]"     # + SciPy sparse solver and pytest
+pip install -e ".[examples]" # + matplotlib for the examples
 pytest                      # run the test suite
 ```
 
@@ -69,6 +72,34 @@ for p in profile:
     print(p.ply_index, p.z, p.stress_material, HashinCriterion("3d").evaluate(
         p.material_stress_3d(), laminate.plies[p.ply_index].material.strength).index)
 ```
+
+## Results at every level
+
+`ResultsExtractor` turns a solution into arrays at each level of fidelity:
+
+```python
+from laminate_modelling_package import ResultsExtractor, TsaiWuCriterion
+
+ex = ResultsExtractor(result, load_case=loads, criterion=TsaiWuCriterion())
+ex.gauss_points()   # strains and N, M, Q at the 2x2 Gauss points
+ex.ply_points()     # ply stresses (global and fibre axes) and failure indices
+ex.elements()       # element N, M, Q, strain-energy split, worst ply
+ex.nodes()          # displacements, reactions, extrapolated and averaged N, M, Q
+ex.totals()         # strain energy, external work, reaction sums, equilibrium residual
+ex.to_csv("results/")
+```
+
+For the bilinear element, moments and stresses are most accurate at element
+centroids (O(h²) convergence); nodal values are smoothed for plotting. See
+[example 03](examples/03_result_fidelity/).
+
+## Examples
+
+[`examples/`](examples/) holds seven worked examples, each in its own folder
+with a script, its figures and a README that walks through the model: kinematic
+models against thickness, through-thickness stresses, result fidelity levels,
+thermal warping, failure envelopes, progressive damage and a CalculiX
+cross-check. Run them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
