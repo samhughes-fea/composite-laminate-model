@@ -25,7 +25,7 @@ import numpy as np
 from .laminate_hygrothermal import HygrothermalProperties
 from .laminate_materials import MaterialCard
 from .laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
-from .laminate_mechanics import Laminate, Ply
+from .laminate_mechanics import Laminate
 
 
 def _interpolate(cls, values, weights):
@@ -118,7 +118,7 @@ def laminate_at_temperature(
         if table is None:
             plies.append(ply)
         else:
-            plies.append(Ply(table.at_temperature(temperature), ply.thickness, ply.angle))
+            plies.append(ply.with_material(table.at_temperature(temperature)))
     return laminate.with_plies(plies)
 
 

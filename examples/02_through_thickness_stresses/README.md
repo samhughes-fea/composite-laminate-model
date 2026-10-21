@@ -47,19 +47,27 @@ python examples/02_through_thickness_stresses/through_thickness_stresses.py
   the 90° ply is much softer along x. FSDT, RZT and layerwise agree with each
   other and with CalculiX. CLPT, which ignores shear flexibility, overshoots the
   outer-ply peak by about 11% at this thickness.
-- **τxz (right)** is where the theories differ:
+- **τxz (right)** is where the theories differ. The thin lines are the shear
+  stress straight from each shell theory's constitutive law:
   - **FSDT** has a constant shear strain, so its stress is piecewise constant
-    and jumps at each interface (about 0.32 MPa in the 0° plies, 0.16 MPa in the
-    90° ply). Interlaminar shear stress should be continuous, so this is a known
-    FSDT weakness.
-  - **RZT and layerwise** give one continuous value through the thickness
-    (about 0.23 MPa). In this 6-DOF shell both reduce to the same constant
-    interlaminar shear stress.
-  - **CLPT** recovers τxz from equilibrium with a parabolic profile, which is
-    continuous, zero at the faces and peaks at mid-thickness.
+    and jumps at each interface (0.32 MPa in the 0° plies, 0.16 MPa in the
+    90° ply). Interlaminar shear stress should be continuous.
+  - **RZT and layerwise** (identical here) also jump: each ply's shear modulus
+    multiplies a different zig-zag slope. Their gain is in the displacements and
+    in-plane stresses, not in the constitutive shear.
+  - **CLPT** recovers τxz from equilibrium with one parabola through the whole
+    thickness, ignoring the stiffness change between plies.
   - **CalculiX** uses the FSDT-type S8R shell, so its points follow the FSDT
     pattern of a ply-wise jump.
+- **The thick dashed lines** come from `EquilibriumStressRecoverer`. It
+  integrates the 3D equilibrium equations through the thickness using the
+  in-plane stress gradients of the solved shell, so the profile is continuous,
+  zero on both faces and parabolic within each ply. It also returns σz. FSDT
+  and RZT give similar shapes; RZT is closer to the exact 3D answer because its
+  in-plane stresses are better (example 17 compares both with Pagano's 3D
+  solution).
 
-None of the shell theories here gives the exact 3D profile, which is
-continuous and parabolic within each ply. Recovering that from the 3D
-equilibrium equations is the top item on the roadmap.
+```python
+rec = EquilibriumStressRecoverer(result, load_case)
+tau_yz, tau_xz, sigma_z = rec.transverse_stresses(element, 0.0, 0.0, z)
+```

@@ -6,8 +6,11 @@ agree with each other, while CLPT (too stiff in shear) overshoots the peak. Righ
 where shear is largest:
 
 * FSDT gives a constant shear strain, so the stress jumps at every ply interface;
-* RZT and layerwise enforce continuous interlaminar shear (they coincide here);
-* CLPT recovers shear from equilibrium with a parabolic profile.
+* RZT and layerwise (they coincide here) give a ply-wise constant stress that also
+  jumps, because each ply's shear modulus multiplies a different zig-zag slope;
+* CLPT recovers shear from equilibrium with a parabolic profile;
+* ``EquilibriumStressRecoverer`` integrates the 3D equilibrium equations through
+  the thickness for any theory: continuous, zero on both faces, parabolic per ply.
 
 When CalculiX is installed, its 3D-expanded composite shell (C3D20R layers) is
 overlaid as an independent reference.
@@ -27,6 +30,7 @@ from laminate_modelling_package import (
     AnalysisModel,
     CalculiXKernelAdapter,
     CLPTModel,
+    EquilibriumStressRecoverer,
     ExactStressRecoverer,
     FEAMesh,
     FSDTModel,
@@ -61,6 +65,7 @@ def main():
     models = [CLPTModel(), FSDTModel(), RefinedZigZagModel(), LayerwiseModel()]
     centre_xy, shear_xy = (A / 2 + A / N_ELEM / 2, A / 2 + A / N_ELEM / 2), (A / N_ELEM / 2, A / 2 + A / N_ELEM / 2)
     curves = {}
+    equilibrium = {}
     rec = ExactStressRecoverer()
     mesh0 = None
     bcs = None
@@ -73,6 +78,9 @@ def main():
         sx = [rec.recover(ec, uc, z, side=s).stress_global[0] for z, s in zip(z_values, sides)]
         txz = [rec.recover(es, us, z, side=s).shear_global[1] for z, s in zip(z_values, sides)]
         curves[model.name] = (np.array(sx), np.array(txz))
+        if model.name in ("FSDT", "RZT"):
+            eq = EquilibriumStressRecoverer(result, LoadCase().add_pressure(Q))
+            equilibrium[model.name] = np.array([eq.transverse_stresses(es, 0.0, 0.0, z)[1] for z in z_values])
         mesh0 = mesh if model.name == "FSDT" else mesh0
 
     ccx = None
@@ -101,7 +109,10 @@ def main():
         if name == "Layerwise":
             style.update(ls=(0, (2, 2)), lw=2.4)
         ax1.plot(sx / 1e6, zn, **style)
-        ax2.plot(txz / 1e6, zn, **style)
+        if name != "Layerwise":  # identical to RZT here
+            ax2.plot(txz / 1e6, zn, **{**style, "lw": 1.4, "alpha": 0.55 if name != "CLPT" else 1.0})
+    for name, txz in equilibrium.items():
+        ax2.plot(txz / 1e6, zn, color=MODEL_COLOURS[name], lw=2.6, ls=(0, (5, 2)), label=f"{name} + equilibrium")
     if ccx is not None:
         (zc, sxc, _), (zs, _, txzc) = ccx
         ax1.plot(sxc / 1e6, zc / h, "o", mfc="none", color=REFERENCE, ms=6, label="CalculiX (3D layers)")
@@ -115,13 +126,16 @@ def main():
     ax2.set_xlabel("transverse shear stress τxz near the x = 0 edge [MPa]")
     peak = {k: np.max(np.abs(v[0])) for k, v in curves.items()}
     ax1.set_title(f"σx: CLPT overshoots the peak by {100 * (peak['CLPT'] / peak['FSDT'] - 1):.0f}%", loc="left")
-    ax2.set_title("τxz: FSDT jumps at ply interfaces", loc="left")
+    ax2.set_title("τxz: equilibrium recovery makes it continuous", loc="left")
     handles, labels = ax1.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=len(labels), frameon=False, bbox_to_anchor=(0.5, 1.06))
+    eq_handles = [h for h, l in zip(*ax2.get_legend_handles_labels()) if "equilibrium" in l]
+    ax2.legend(eq_handles, [h.get_label() for h in eq_handles], loc="lower right", frameon=False, fontsize=8)
     for label, z in zip(("0° ply", "90° ply", "0° ply"), lam.ply_midplanes() / h):
         ax1.text(0.02, z, label, transform=ax1.get_yaxis_transform(), va="center", fontsize=8, color=TEXT_SECONDARY)
     fig.text(0.0, -0.03, f"[0/90/0] T300/5208, a/h = {RATIO}, simply supported, q = {Q/1e3:.0f} kPa, {N_ELEM} x {N_ELEM} mesh. "
-             "Dashed horizontal lines mark ply interfaces.", fontsize=7.5, color=TEXT_SECONDARY)
+             "Dashed horizontal lines mark ply interfaces. "
+             "Right: thin lines are the constitutive (shell) shear stress.", fontsize=7.5, color=TEXT_SECONDARY)
     fig.tight_layout()
     save(fig, __file__, "through_thickness_stresses.png")
 
