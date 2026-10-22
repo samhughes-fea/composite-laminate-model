@@ -144,9 +144,9 @@ props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_cou
 - **Sets.** Element sets per region and side (`spar_cap_ss`, `te_panel`, `skin`,
   `webs`, ...) and node sets (`root`, `tip`, `le`, `te`, each web) for loads,
   supports and results.
-- **Elements.** `element="quad4"`, `"quad8"` or `"quad8_curved"`. With skins on
-  the outer mould line, use `"quad8_curved"` when torsion matters in thick-walled
-  sections (see Limitations).
+- **Elements.** `element="quad8_curved"` (default), `"quad8"` or `"quad4"`. With
+  skins on the outer mould line, the flat elements lose torsional stiffness in
+  thick-walled sections (see Limitations).
 
 `add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
 section loads from an aeroelastic code into the model, and measure section motion.
@@ -236,8 +236,9 @@ results = StructuralGlobalSolver().solve_combinations(
     mesh, bcs, cases, [LoadCombination("ULS", {"dead": 1.35, "wind": 1.5, "tip": 1.0})])
 ```
 
-- **Elements.** `"tri3"`, `"quad4"` (default), `"quad8"`, and the curved
-  `"quad8_curved"` and `"tri6"`, everywhere a mesh is built; `FEAMesh.add_element` picks the type from the node count, and new
+- **Elements.** The curved `"quad8_curved"` (default) and `"tri6"`, and the flat
+  `"quad4"`, `"tri3"` and `"quad8"`, everywhere a mesh is built (`FEAMesh.rectangular_plate`
+  stays a Quad4 helper); `FEAMesh.add_element` picks the type from the node count, and new
   element classes plug in through `ElementRegistry`.
 - **Orientation.** `material_axis` (a vector, `CylindricalDirection`, or
   `FieldDirection(f)`) sets each element's 0° direction; by default it is the
@@ -271,8 +272,10 @@ gm = GmshPlateBuilder(0.3, 0.15, [CircularHole(0.15, 0.075, 0.005)], size=0.012,
 ```
 
 Tri3, Quad4 and Quad8 cells (Gmsh types 2, 3 and 16) are imported, in any mix.
-`GmshPlateBuilder(..., element="quad8")` and `from_file(..., element=...)` set the
-Gmsh options (`"tri3"`, `"quad4"`, `"quad8"` or `"quad_dominant"`); for Quad8 in
+`GmshPlateBuilder(..., element="quad4")` and `from_file(..., element=...)` set the
+Gmsh options (`"quad8_curved"` by default, `"tri3"`, `"quad4"`, `"quad8"`, `"tri6"` or
+`"quad_dominant"`); 8-node quads read from a `.msh` file become curved Quad8 unless
+the importer is given `curved=False`; for Quad8 in
 your own models use `Mesh.ElementOrder = 2` with `Mesh.SecondOrderIncomplete = 1`. Gmsh is
 optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 `libglu1-mesa`. See [example 08](examples/08_open_hole_gmsh/).
@@ -328,7 +331,7 @@ If `ccx` or `nastran` is not on the `PATH`, that kernel still writes its input d
 - **Refined zig-zag (RZT).** u(z) = u0 + z·β + φ(z)·ψ, with the zig-zag function φ built from the ply shear moduli (Tessler, Di Sciuva and Gherlone). The amplitudes ψ are extra nodal DOFs, so the element carries the zig-zag through the thickness and its gradients. `RefinedZigZagModel(condensed=True)` ties ψ to the mean shear instead (6 DOFs per node, shear stiffness A_s = hG).
 - **Layerwise.** Each internal interface carries its own in-plane displacement (hat functions in z), optionally with sub-layers inside each ply. `LayerwiseModel(condensed=True)` condenses them out into a 6-DOF section.
 - **Generalised sections.** Every theory is written as ε(z) = E(z)·e and γ(z) = G(z)·s, with section matrices ∫EᵀQ̄E dz and ∫GᵀQ̄sG dz, so all theories share one element formulation.
-- **Elements.** Flat facets with a drilling penalty tying θz to ½(v,x − u,y). Quad4: 2×2 Gauss, MITC4 shear and incompatible (QM6) membrane modes, which removes in-plane shear locking. Tri3: constant-strain membrane with MITC3 shear (stiffer; use where quads cannot go). Quad8: serendipity, 3×3 Gauss with 2×2 selective-reduced shear. Each element has exactly six rigid-body modes and passes the membrane patch test on distorted meshes.
+- **Elements.** Flat facets with a drilling penalty tying θz to ½(v,x − u,y). Quad4: 2×2 Gauss, MITC4 shear and incompatible (QM6) membrane modes, which removes in-plane shear locking. Tri3: constant-strain membrane with MITC3 shear (stiffer; use where quads cannot go). Quad8: serendipity, 3×3 Gauss with 2×2 selective-reduced shear. Each element has exactly six rigid-body modes and passes the membrane patch test on distorted meshes. Curved Quad8 (the default): degenerated-shell kinematics with a tangent frame at every integration point; membrane (with its coupling to bending, so offset and unsymmetric laminates keep a positive semi-definite stiffness) and transverse shear on 2×2 points, bending and drilling on 3×3. A single element keeps one non-communicable membrane mode, as S8R does; two or more have exactly six rigid-body modes.
 - **Equilibrium recovery.** In-plane strains are smoothed to the nodes by superconvergent patch recovery, differentiated twice, and the 3D equilibrium equations are integrated analytically through each ply. Face conditions are enforced exactly, and the shear profile is scaled to the element shear force.
 - **Constraints.** Fixed DOFs, skew supports and multi-point constraints u_s = Σ c_i u_i + c0 are eliminated with U = T U_r + g. A free rigid-body mode raises `SingularStiffnessError`, detected from the factorisation pivots.
 
@@ -363,14 +366,14 @@ The test suite includes:
 - Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
 - Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
-- The IEA 15 MW reference blade ([example 24](examples/24_iea15mw_section_properties/)): from its published layup, EA, EI, mass and the tension centre agree with PreComp on the same sections within about 1% at six stations; the shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within about 1% in deflection, 2% in twist and 6% in spar-cap fibre stress.
+- The IEA 15 MW reference blade ([example 24](examples/24_iea15mw_section_properties/)): from its published layup, EA, EI, mass and the tension centre agree with PreComp on the same sections within 0.3% at six stations; the shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within about 1% in deflection, 2% in twist and 6% in spar-cap fibre stress.
 
 ## Limitations
 
 - The analysis is linear and small-deflection.
 - Progressive damage is ply-by-ply stiffness knockdown (`SmearedCrackDegradation`), by design. There is no crack-band regularisation by fracture energy, cohesive zone or continuum damage mechanics, so post-failure softening is not mesh-objective. The knockdown is meant for first-ply-to-last-ply load paths and stiffness loss, not for crack growth.
 - Tri3, Quad4 and Quad8 are flat facets (warped elements raise a warning); use `quad8_curved` or `tri6` where curvature matters. Tri6 still shows some membrane locking on strongly curved shells.
-- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; use `element="quad8_curved"` there (example 24 shows it on the IEA 15 MW blade).
+- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there (example 24 shows it on the IEA 15 MW blade).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
 - `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time.

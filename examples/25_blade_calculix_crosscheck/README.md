@@ -69,8 +69,8 @@ Without `ccx` the script says so and stops. It takes about two minutes.
 | Tip flapwise deflection, Quad4 mesh | 301.5 mm | 304.6 mm | −1.0% |
 | Tip edgewise deflection, Quad4 mesh | −24.3 mm | −24.4 mm | −0.4% |
 | Tip twist, Quad4 mesh | 0.801° | 0.814° | −1.6% |
-| Tip flapwise deflection, curved Quad8 mesh | 301.0 mm | 304.1 mm | −1.0% |
-| Tip twist, curved Quad8 mesh | 0.801° | 0.791° | 1.3% |
+| Tip flapwise deflection, curved Quad8 mesh | 301.1 mm | 304.1 mm | −1.0% |
+| Tip twist, curved Quad8 mesh | 0.795° | 0.791° | 0.5% |
 | Flapwise displacement, every node (Quad4 mesh) | | | max 1.2% of the peak |
 | Fibre stress in the suction cap at a quarter span | | | max 5.9% of the peak |
 | σ22 and τ12 in the sandwich panel at a quarter span | | | max 1.0% of the peak |

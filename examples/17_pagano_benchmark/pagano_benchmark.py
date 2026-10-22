@@ -126,7 +126,7 @@ def main():
     ax1.set_ylabel("z / h")
     ax1.legend(loc="lower right", fontsize=8)
     fig.text(0.0, -0.04, f"[0/90/0] Pagano material (E1/E2 = 25), simply supported, q = q0 sin(πx/a) sin(πy/a), "
-             f"{N} x {N} Quad4, layerwise with 3 sub-layers per ply. Dashed horizontal lines mark ply interfaces.",
+             f"{N} x {N} curved Quad8, layerwise with 3 sub-layers per ply. Dashed horizontal lines mark ply interfaces.",
              fontsize=7.5, color=TEXT_SECONDARY)
     fig.tight_layout()
     save(fig, __file__, "pagano_benchmark.png")

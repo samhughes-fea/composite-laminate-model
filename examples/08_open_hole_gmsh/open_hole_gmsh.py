@@ -81,7 +81,9 @@ def solve(gm):
 
 def main():
     card = create_default_library().get("T300/5208")
-    builder = GmshPlateBuilder(L, W, [CircularHole(L / 2, W / 2, R)], size=0.012, hole_size=0.0003, transition=6)
+    # Quad4: Kt is read from nodal averages at the hole, which suits linear elements (example 18 compares types)
+    builder = GmshPlateBuilder(L, W, [CircularHole(L / 2, W / 2, R)], size=0.012, hole_size=0.0003, transition=6,
+                               element="quad4")
     results = {}
     print(f"{'laminate':<16}{'Kt FE':>8}{'Kt Lekhnitskii':>16}{'difference':>12}")
     for name, angles in LAMINATES.items():

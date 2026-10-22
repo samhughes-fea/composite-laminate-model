@@ -12,7 +12,7 @@ design combinations by superposition.
 | Item | Value |
 |---|---|
 | Laminate | [0/45/−45/90/0]2s T300/5208, 0.25 mm plies (5 mm) |
-| Panel | 1000 × 250 mm, 40 × 10 Quad4, FSDT |
+| Panel | 1000 × 250 mm, 40 × 10 curved Quad8 (the default), FSDT |
 | Supports | root clamped, strut at mid-span as a grounded spring k = 500 kN/m |
 | `dead` | self-weight, `add_body_load((0, 0, -9.81))` |
 | `lift` | elliptic pressure p = 1 kPa · √(1 − (x/L)²), a callable |

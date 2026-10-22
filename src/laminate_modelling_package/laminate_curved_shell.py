@@ -21,9 +21,13 @@ director).
 
 Integration is selective. The quad integrates membrane and transverse shear with
 2 x 2 Gauss points, which removes membrane and shear locking in thin curved shells,
-and bending, drilling and enrichment terms with 3 x 3, which keeps exactly six
-rigid-body modes (``integration="selective"``, the default; ``"full"`` uses 3 x 3
-for the membrane too, ``"reduced"`` 2 x 2 for everything, as S8R). The triangle uses
+and bending, drilling and enrichment terms with 3 x 3 (``integration="selective"``,
+the default; ``"full"`` uses 3 x 3 for the membrane too, ``"reduced"`` 2 x 2 for
+everything, as S8R). The membrane part moved to 2 x 2 includes the membrane-bending
+coupling of offset or unsymmetric laminates, so the element stiffness stays positive
+semi-definite. A single selective quad keeps the serendipity quad's one
+non-communicable membrane mode, as S8R does; a mesh of two or more has exactly six
+rigid-body modes. The triangle uses
 a 6-point rule for bending and 3 points for membrane and shear.
 Results are sampled at the 2 x 2 points (quad) or the 3 points (triangle).
 
@@ -216,10 +220,19 @@ class CurvedShellElement(ShellElement):
         K = super().local_stiffness_matrix().copy()
         full, reduced = self.stiffness_rule(), self.membrane_rule()
         if reduced != full:
-            A = self.section.C_ee[:3, :3]
+            # The section energy splits into two non-negative parts,
+            #   e^T C e = m^T A m + r^T (C_rr - C_rm A^-1 C_mr) r,   m = e_m + A^-1 C_mr r,
+            # with e_m the membrane strains and r the rest (curvatures, enrichment). Only
+            # the first part moves to the reduced rule. Swapping the bare membrane term
+            # instead leaves the membrane-bending coupling of offset or unsymmetric
+            # laminates on the full rule, and the element stiffness can turn indefinite.
+            C = self.section.C_ee
+            A = C[:3, :3]
+            G = np.linalg.solve(A, C[:3, 3:])
             for rule, sign in ((full, -1.0), (reduced, 1.0)):
                 for xi, eta, w in rule:
-                    B_m = self.in_plane_operator(xi, eta)[:3]
+                    B_e = self.in_plane_operator(xi, eta)
+                    B_m = B_e[:3] + G @ B_e[3:]
                     K += sign * (B_m.T @ A @ B_m) * (w * self._point(xi, eta)["detJ"])
         self._K_local = 0.5 * (K + K.T)
         return self._K_local

@@ -144,7 +144,7 @@ def main():
     ax2.set_title("Worst index of each named ply", loc="left")
     ax2.grid(axis="x", visible=False)
     fig.text(0.0, -0.05, f"Root 1.2 m NACA 0024 to tip 0.6 m NACA 0018, −6° twist, {LENGTH:g} m, {N_SPAN} elements along the span, "
-             f"Quad4 FSDT. E-glass/epoxy: skins [±45/0/∓45], caps [±45 / {FULL_PLIES}–20 x 1 mm UD / ∓45, 0], webs [±45]s. "
+             f"curved Quad8 FSDT. E-glass/epoxy: skins [±45/0/∓45], caps [±45 / {FULL_PLIES}–20 x 1 mm UD / ∓45, 0], webs [±45]s. "
              f"Flap pressure 0 to {Q_TIP / 1e3:g} kPa on the pressure side; root clamped.", fontsize=7.5, color=TEXT_SECONDARY)
     fig.tight_layout()
     save(fig, __file__, "spar_cap_ply_drops.png")

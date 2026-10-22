@@ -84,16 +84,16 @@ It takes about 15 minutes (six curved-Quad8 and six Quad4 models).
 | Station r [m] | EA | EI flap | EI edge | GJ | mass | tension centre x/c | shear centre x/c (shell / PreComp / published) |
 |---|---|---|---|---|---|---|---|
 | 4.0 | 1.000 | 1.000 | 1.000 | 0.952 | 1.000 | 0.500 / 0.500 | 0.494 / 0.500 / 0.500 |
-| 28.2 | 1.002 | 1.001 | 1.010 | 1.003 | 1.000 | 0.420 / 0.420 | 0.317 / 0.418 / 0.322 |
-| 44.3 | 0.997 | 0.999 | 1.005 | 1.155 | 1.000 | 0.367 / 0.366 | 0.285 / 0.362 / 0.290 |
-| 64.5 | 0.999 | 0.993 | 0.999 | 1.198 | 1.000 | 0.355 / 0.355 | 0.262 / 0.353 / 0.268 |
-| 84.7 | 1.000 | 0.998 | 0.997 | 1.372 | 0.999 | 0.320 / 0.320 | 0.234 / 0.320 / 0.255 |
-| 104.8 | 0.999 | 0.994 | 0.985 | 2.098 | 1.000 | 0.332 / 0.333 | 0.249 / 0.333 / 0.279 |
+| 28.2 | 1.001 | 1.001 | 1.003 | 1.003 | 1.000 | 0.420 / 0.420 | 0.317 / 0.418 / 0.322 |
+| 44.3 | 1.001 | 1.000 | 1.000 | 1.155 | 1.000 | 0.367 / 0.366 | 0.285 / 0.362 / 0.290 |
+| 64.5 | 1.001 | 1.001 | 1.001 | 1.197 | 1.000 | 0.355 / 0.355 | 0.262 / 0.353 / 0.268 |
+| 84.7 | 1.000 | 1.001 | 0.998 | 1.373 | 0.999 | 0.320 / 0.320 | 0.233 / 0.320 / 0.255 |
+| 104.8 | 1.001 | 1.001 | 1.001 | 2.143 | 1.000 | 0.332 / 0.333 | 0.249 / 0.333 / 0.279 |
 
 Stiffness and mass columns are shell model / PreComp.
 
 - **Axial, bending, mass, tension centre: agree.** EA, both bending stiffnesses
-  and the mass are within 1.5% of PreComp at every station (mostly within 0.5%),
+  and the mass are within 0.3% of PreComp at every station,
   and the tension and mass centres within 0.1% of the chord. Since the geometry,
   layup and materials are identical, this checks the section builder (airfoil,
   sector mapping, laminate order, offsets, webs) and the stiffness extraction.
@@ -105,7 +105,7 @@ Stiffness and mass columns are shell model / PreComp.
   the root tube the shell model is 3% under the published GJ (the offset skin's
   area is taken on the outer surface, as in the tube check) and PreComp is 2%
   over it. Outboard, PreComp falls below half of the published GJ while the shell
-  model stays within 3–18% of it. PreComp's torsion comes from a simplified
+  model stays within 3–16% of it. PreComp's torsion comes from a simplified
   thin-wall shear-flow model, and published comparisons with finite-element
   section tools (VABS, BECAS) report its torsional stiffness and shear centre as
   its least reliable outputs, which is what this shows.

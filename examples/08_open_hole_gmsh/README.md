@@ -13,7 +13,7 @@ concentration of four laminates with Lekhnitskii's orthotropic solution.
 |---|---|
 | Laminates | [0]8, [0/90]2s, [0/45/-45/90]s and [±45]2s, T300/5208, 0.125 mm plies |
 | Plate | 300 × 150 mm with a central 10 mm hole (W/d = 15) |
-| Mesh | Gmsh quads: 12 mm far away, 0.3 mm on the hole edge, graded over 6 hole radii (about 3,000 elements) |
+| Mesh | Gmsh Quad4 (Kt comes from nodal averages, which suit linear elements): 12 mm far away, 0.3 mm on the hole edge, graded over 6 hole radii (about 3,000 elements) |
 | Supports | left edge held in x, one node held in y, out-of-plane DOFs held |
 | Load | uniform line load N_x = 100 kN/m on the right edge |
 | Model | FSDT |
@@ -33,7 +33,7 @@ python examples/08_open_hole_gmsh/open_hole_gmsh.py
 
    ```python
    builder = GmshPlateBuilder(0.3, 0.15, [CircularHole(0.15, 0.075, 0.005)],
-                              size=0.012, hole_size=0.0003, transition=6)
+                              size=0.012, hole_size=0.0003, transition=6, element="quad4")
    gm = builder.build(GmshMeshImporter(laminate, FSDTModel()))
    gm.mesh            # an ordinary FEAMesh
    gm.nodes("left")   # named node sets: left, right, bottom, top, hole_1, plate

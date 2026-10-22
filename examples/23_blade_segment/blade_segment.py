@@ -231,7 +231,7 @@ def main():
     ax2.grid(axis="x", visible=False)
     ax2.set_ylim(0.0, 1.3 * np.nanmax(faces + core))
     ax2.legend(loc="upper left", ncol=2)
-    fig.text(0.0, -0.05, f"NACA 4421, {CHORD:g} m chord, {LENGTH:g} m, Quad4 FSDT, {N_SPAN} elements along the span. "
+    fig.text(0.0, -0.05, f"NACA 4421, {CHORD:g} m chord, {LENGTH:g} m, curved Quad8 FSDT, {N_SPAN} elements along the span. "
              f"E-glass/epoxy faces [±45/0], PVC foam 10 mm (LE) and 15 mm (TE), caps [±45/16 x 1 mm UD/∓45], "
              f"webs [±45]4. Suction {Q_SUCTION / 1e3:g} kPa, pressure {Q_PRESSURE / 1e3:g} kPa, edgewise gravity, "
              f"tip shear ({TIP_FORCE[0] / 1e3:g}, {TIP_FORCE[1] / 1e3:g}) kN and {TIP_TORQUE / 1e3:g} kN m through RBE3.",

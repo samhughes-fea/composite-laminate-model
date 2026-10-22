@@ -220,8 +220,10 @@ class BladeBuilder:
     n_span:
         Elements along the span (an int), or increasing span fractions 0..1.
     element:
-        ``"quad4"`` (default), ``"quad8"`` or ``"quad8_curved"``. Quadratic elements
-        put their mid-side nodes on the airfoil surface.
+        ``"quad8_curved"`` (default), ``"quad8"`` or ``"quad4"``. Quadratic elements
+        put their mid-side nodes on the airfoil surface. Flat facets (``"quad4"``,
+        ``"quad8"``) under-predict the torsional stiffness of thick-walled sections
+        with offset skins, so keep the default where torsion matters.
     trailing_edge:
         ``"auto"`` joins the surfaces at a sharp trailing edge and adds a flat
         ``te_web`` across a blunt one; ``"web"`` always adds it.
@@ -239,7 +241,7 @@ class BladeBuilder:
         regions: Sequence[SkinRegion],
         webs: Sequence[ShearWeb] = (),
         n_span: Union[int, Sequence[float]] = 10,
-        element: str = "quad4",
+        element: str = "quad8_curved",
         skin_reference: str = "outer",
         trailing_edge: str = "auto",
         te_web_elements: int = 2,

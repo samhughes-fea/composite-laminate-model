@@ -14,10 +14,10 @@ Physical groups carry the model data:
 Supported surface elements are 3-node triangles (Tri3), 6-node triangles (Tri6,
 curved), 4-node quads (Quad4) and 8-node serendipity quads (Quad8, ``Mesh.ElementOrder
 = 2`` with ``Mesh.SecondOrderIncomplete = 1``), in any mix. 8-node quads become flat
-Quad8 elements, or curved Quad8 shells with ``curved=True``. Gmsh puts second-order
+Quad8 elements with ``curved=False``, or curved Quad8 shells (the default). Gmsh puts second-order
 nodes on the CAD geometry, so the curved elements follow curved surfaces. The
-builders take ``element="quad4" | "tri3" | "quad8" | "quad8_curved" | "tri6" |
-"quad_dominant"`` and set the Gmsh options.
+builders take ``element="quad8_curved"`` (the default) ``| "quad4" | "tri3" | "quad8" |
+"tri6" | "quad_dominant"`` and set the Gmsh options.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ class GmshMeshImporter:
         reversed, so pressure and the ply stack face a consistent side. Use
         ``None`` to keep Gmsh's orientation (for example on closed 3D surfaces).
     curved:
-        Build 8-node quads as curved Quad8 shells instead of flat Quad8.
+        Build 8-node quads as curved Quad8 shells (the default) instead of flat Quad8.
     """
 
     def __init__(
@@ -144,7 +144,7 @@ class GmshMeshImporter:
         kinematics: KinematicModel,
         default_laminate: Optional[Laminate] = None,
         reference_normal: Optional[Sequence[float]] = (0.0, 0.0, 1.0),
-        curved: bool = False,
+        curved: bool = True,
         **element_options,
     ):
         self.curved = bool(curved)
@@ -160,12 +160,15 @@ class GmshMeshImporter:
 
     # ----------------------------------------------------------------- entry points
     def from_file(
-        self, path: Union[str, Path], mesh_options: Optional[Mapping[str, float]] = None, element: str = "quad4"
+        self, path: Union[str, Path], mesh_options: Optional[Mapping[str, float]] = None,
+        element: Optional[str] = None,
     ) -> GmshMesh:
         """Read a ``.msh`` file, or open a geometry file (``.geo``, ``.step``, ...) and mesh it.
 
-        ``element`` picks the element family for geometry files; ``mesh_options``
-        overrides or adds Gmsh options.
+        ``element`` picks the element family for geometry files (curved Quad8 by
+        default); ``mesh_options`` overrides or adds Gmsh options. A ``.msh`` file keeps
+        its own elements, and its 8-node quads follow the importer's ``curved`` unless
+        ``element`` says otherwise.
         """
         path = Path(path)
         if not path.exists():
@@ -174,12 +177,13 @@ class GmshMeshImporter:
             gmsh.clear()
             gmsh.open(str(path))
             if path.suffix.lower() != ".msh":
+                element = element or "quad8_curved"
                 options = globals()["mesh_options"](element)
                 options.update(mesh_options or {})
                 for name, value in options.items():
                     gmsh.option.setNumber(name, value)
                 gmsh.model.mesh.generate(2)
-            return self.from_model(curved=True if element == "quad8_curved" else None)
+            return self.from_model(curved={"quad8_curved": True, "quad8": False}.get(element))
 
     def from_model(self, curved: Optional[bool] = None) -> GmshMesh:
         """Convert the mesh of the current Gmsh model (already generated) into an ``FEAMesh``.
@@ -303,7 +307,7 @@ class GmshPlateBuilder:
     ``bottom`` (y = 0), ``top`` (y = width), ``hole_1``, ``hole_2``, ... and
     ``plate`` (the whole surface, also the element set name). The element size
     shrinks to ``hole_size`` on the hole edges and grows to ``size`` over
-    ``transition`` hole radii. ``element`` chooses Quad4 (default), Tri3, Quad8, curved Quad8, Tri6
+    ``transition`` hole radii. ``element`` chooses curved Quad8 (default), Quad4, Tri3, flat Quad8, Tri6
     or a quad-dominant Quad4/Tri3 mix.
     """
 
@@ -315,7 +319,7 @@ class GmshPlateBuilder:
         size: Optional[float] = None,
         hole_size: Optional[float] = None,
         transition: float = 3.0,
-        element: str = "quad4",
+        element: str = "quad8_curved",
     ):
         self.element = element
         mesh_options(element)  # validates the choice
@@ -342,7 +346,7 @@ class GmshPlateBuilder:
             gmsh.model.mesh.generate(2)
             if save_msh is not None:
                 gmsh.write(str(save_msh))
-            return importer.from_model(curved=True if self.element == "quad8_curved" else None)
+            return importer.from_model(curved={"quad8_curved": True, "quad8": False}.get(self.element))
 
     def _geometry(self, gmsh) -> None:
         occ = gmsh.model.occ

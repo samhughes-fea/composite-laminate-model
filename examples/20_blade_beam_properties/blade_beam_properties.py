@@ -120,7 +120,7 @@ def main():
     ax2.set_xlabel("cap fibre angle θ [deg]")
     ax2.set_ylabel("S₁₄ / √(S₁₁ S₄₄)  (flap-twist)")
     ax2.set_title("Bend-twist coupling", loc="left")
-    fig.text(0.0, -0.05, f"NACA 0024, chord {CHORD:g} m, {LENGTH:g} m segment, {N_SPAN} elements along the span, Quad4 FSDT. "
+    fig.text(0.0, -0.05, f"NACA 0024, chord {CHORD:g} m, {LENGTH:g} m segment, {N_SPAN} elements along the span, curved Quad8 FSDT. "
              "Skins [0/±45]s E-glass 3 mm; caps 16 x 0.5 mm T300/5208 at +θ (suction) / −θ (pressure), 18-48% chord; "
              "webs [±45]s E-glass at 18% and 48%.", fontsize=7.5, color=TEXT_SECONDARY)
     fig.tight_layout()

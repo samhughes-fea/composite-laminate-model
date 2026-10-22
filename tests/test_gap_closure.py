@@ -140,7 +140,7 @@ def test_rotated_plate_with_material_axis_gives_the_same_answer(cfrp):
     R = np.array([[np.cos(theta), -np.sin(theta), 0], [np.sin(theta), np.cos(theta), 0], [0, 0, 1]])
     results = []
     for rotate in (False, True):
-        mesh = RectangularPlateBuilder(a, a, 6, 6).build(lam, FSDTModel())
+        mesh = RectangularPlateBuilder(a, a, 6, 6, element="quad4").build(lam, FSDTModel())  # rebuilt below by node count
         bcs = simply_supported(mesh, a, a, hard=False)
         centre = mesh.closest_node((a / 2, a / 2))
         if rotate:

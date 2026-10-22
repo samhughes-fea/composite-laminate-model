@@ -13,7 +13,7 @@ mechanism behind load-alleviating, bend-twist-coupled blades.
 | Item | Value |
 |---|---|
 | Section | NACA 0024, 1 m chord, pitch axis at 30% chord |
-| Segment | 6 m prismatic, Quad4 FSDT, 20 elements along the span |
+| Segment | 6 m prismatic, curved Quad8 FSDT (the default), 20 elements along the span |
 | Skins | E-glass/epoxy [0/45/−45]s, 0.5 mm plies (3 mm) |
 | Spar caps | 16 × 0.5 mm T300/5208 at 18–48% chord, at +θ on the suction side and −θ on the pressure side |
 | Webs | E-glass/epoxy [±45]s at 18% and 48% chord |
@@ -64,7 +64,7 @@ python examples/20_blade_beam_properties/blade_beam_properties.py
 
 - **Left:** the section with its centres. The tension centre (51 mm aft of the
   pitch axis) sits where the carbon caps put it; the shear centre is just aft of
-  the pitch axis (17 mm) and the mass centre further aft (130 mm), pulled back by
+  the pitch axis (14 mm) and the mass centre further aft (130 mm), pulled back by
   the long trailing-edge skin. The section weighs 17.5 kg/m.
 - **Middle:** turning the cap fibres costs axial and flap stiffness fast (EI flap
   falls to 0.43 of its 0° value at 20°) and gains torsional stiffness (GJ rises by
