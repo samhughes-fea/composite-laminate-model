@@ -134,6 +134,32 @@ def test_beam_properties_of_a_thin_tube(aluminium, element):
     assert np.allclose(p.bend_twist_coupling, 0.0, atol=1e-6)
 
 
+def _thick_tube_gj_ratio(aluminium, element, reference, t_over_r=0.04):
+    """GJ of a thick tube (outer radius 1) over the exact G 2 pi R^3 t, R the mid-wall radius."""
+    R, t = 1.0, t_over_r
+    circle = Airfoil.ellipse(1.0)
+    n = 24 if element == "quad4" else 12
+    blade = BladeBuilder([Station(0, 2 * R, circle, pitch_axis=0.5), Station(8, 2 * R, circle, pitch_axis=0.5)],
+                         [SkinRegion("a", 0, 0.5, n), SkinRegion("b", 0.5, 1.0, n)], n_span=16, element=element,
+                         skin_reference=reference).build(Laminate([Ply(aluminium, t)]), FSDTModel())
+    G = aluminium.elastic.E1 / (2 * (1 + aluminium.elastic.v12))
+    r_mid = R - 0.5 * t if reference == "outer" else R
+    return beam_section_properties(blade).GJ / (G * 2 * np.pi * r_mid**3 * t)
+
+
+def test_curved_shells_with_offset_skins_keep_the_torsion_of_a_thick_tube(aluminium):
+    # The 2% left over is the offset skin's area, taken on the outer surface (EA is 2% high too).
+    assert _thick_tube_gj_ratio(aluminium, "quad8_curved", "outer") == pytest.approx(1.0, abs=0.03)
+    assert _thick_tube_gj_ratio(aluminium, "quad4", "mid") == pytest.approx(1.0, abs=0.01)
+
+
+@pytest.mark.xfail(strict=True, reason="known limitation: flat shells (Quad4, flat Quad8) with skins offset from "
+                                       "the reference surface lose torsional stiffness in thick closed sections "
+                                       "(about 22% at t/R = 0.04, 35% at 0.06); use quad8_curved")
+def test_flat_shells_with_offset_skins_keep_the_torsion_of_a_thick_tube(aluminium):
+    assert _thick_tube_gj_ratio(aluminium, "quad4", "outer") == pytest.approx(1.0, abs=0.03)
+
+
 def test_beam_properties_show_bend_twist_coupling_and_offset_centres(cfrp):
     af = Airfoil.naca4("0024")
     lams = laminates(cfrp)

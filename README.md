@@ -63,7 +63,7 @@ general laminate mechanics from thin plates to thick laminates:
 │       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
 │       ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
 │       └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
-├── examples/                               twenty-three worked examples with figures (see examples/README.md)
+├── examples/                               twenty-five worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -144,7 +144,9 @@ props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_cou
 - **Sets.** Element sets per region and side (`spar_cap_ss`, `te_panel`, `skin`,
   `webs`, ...) and node sets (`root`, `tip`, `le`, `te`, each web) for loads,
   supports and results.
-- **Elements.** `element="quad4"`, `"quad8"` or `"quad8_curved"`.
+- **Elements.** `element="quad4"`, `"quad8"` or `"quad8_curved"`. With skins on
+  the outer mould line, use `"quad8_curved"` when torsion matters in thick-walled
+  sections (see Limitations).
 
 `add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
 section loads from an aeroelastic code into the model, and measure section motion.
@@ -277,7 +279,7 @@ optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 
 ## Examples
 
-[`examples/`](examples/) holds twenty-three worked examples, each in its own folder
+[`examples/`](examples/) holds twenty-five worked examples, each in its own folder
 with a script, its figures and a README that walks through the model. Examples
 01–19 cover the laminate mechanics underneath: the kinematic theories,
 through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
@@ -285,7 +287,10 @@ and envelopes, progressive damage, Gmsh meshing, sandwich panels, bending-twist
 coupling, design sweeps, solver scaling, a CalculiX cross-check, the Pagano 3D
 benchmark, the element types and load combinations. Examples 20–23 are blade
 structures: beam properties and bend-twist tailoring, spar cap ply drops, the 3D
-stresses at a ply drop, and a sandwich blade segment checked against a beam. Run them all with `python examples/run_all.py`.
+stresses at a ply drop, and a sandwich blade segment checked against a beam. Examples
+24 and 25 validate the blade tools on the IEA 15 MW reference blade: section
+properties against PreComp and the published data, and a 20 m segment against
+CalculiX. Run them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
@@ -358,12 +363,14 @@ The test suite includes:
 - Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
 - Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
+- The IEA 15 MW reference blade ([example 24](examples/24_iea15mw_section_properties/)): from its published layup, EA, EI, mass and the tension centre agree with PreComp on the same sections within about 1% at six stations; the shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within about 1% in deflection, 2% in twist and 6% in spar-cap fibre stress.
 
 ## Limitations
 
 - The analysis is linear and small-deflection.
 - Progressive damage is ply-by-ply stiffness knockdown (`SmearedCrackDegradation`), by design. There is no crack-band regularisation by fracture energy, cohesive zone or continuum damage mechanics, so post-failure softening is not mesh-objective. The knockdown is meant for first-ply-to-last-ply load paths and stiffness loss, not for crack growth.
 - Tri3, Quad4 and Quad8 are flat facets (warped elements raise a warning); use `quad8_curved` or `tri6` where curvature matters. Tri6 still shows some membrane locking on strongly curved shells.
+- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; use `element="quad8_curved"` there (example 24 shows it on the IEA 15 MW blade).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
 - `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time.
