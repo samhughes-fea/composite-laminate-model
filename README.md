@@ -362,6 +362,7 @@ The test suite includes:
 ## Limitations
 
 - The analysis is linear and small-deflection.
+- Progressive damage is ply-by-ply stiffness knockdown (`SmearedCrackDegradation`), by design. There is no crack-band regularisation by fracture energy, cohesive zone or continuum damage mechanics, so post-failure softening is not mesh-objective. The knockdown is meant for first-ply-to-last-ply load paths and stiffness loss, not for crack growth.
 - Tri3, Quad4 and Quad8 are flat facets (warped elements raise a warning); use `quad8_curved` or `tri6` where curvature matters. Tri6 still shows some membrane locking on strongly curved shells.
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
