@@ -63,7 +63,7 @@ general laminate mechanics from thin plates to thick laminates:
 │       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
 │       ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
 │       └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
-├── examples/                               twenty-five worked examples with figures (see examples/README.md)
+├── examples/                               twenty-six worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -147,6 +147,14 @@ props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_cou
 - **Elements.** `element="quad8_curved"` (default), `"quad8"` or `"quad4"`. With
   skins on the outer mould line, the flat elements lose torsional stiffness in
   thick-walled sections (see Limitations).
+- **Mesh surface.** `mesh_surface="outer"` (default) meshes the skins on the outer
+  mould line and offsets the laminates. `mesh_surface="mid"` meshes them on the
+  laminates' mid-surface instead: skin nodes move inward by the local offset,
+  smoothed along the skin across region edges and ply drops
+  (`mid_surface_smoothing`, two of the thickest skins by default), the webs end on
+  the moved skins, and the offsets go (small residuals stay in the blends, so the
+  plies keep their place). After a `Layup`, `blade.to_mid_surface()` does the same
+  with the ply-by-ply thicknesses. Example 26 compares the two.
 
 `add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
 section loads from an aeroelastic code into the model, and measure section motion.
@@ -282,7 +290,7 @@ optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 
 ## Examples
 
-[`examples/`](examples/) holds twenty-five worked examples, each in its own folder
+[`examples/`](examples/) holds twenty-six worked examples, each in its own folder
 with a script, its figures and a README that walks through the model. Examples
 01–19 cover the laminate mechanics underneath: the kinematic theories,
 through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
@@ -293,7 +301,8 @@ structures: beam properties and bend-twist tailoring, spar cap ply drops, the 3D
 stresses at a ply drop, and a sandwich blade segment checked against a beam. Examples
 24 and 25 validate the blade tools on the IEA 15 MW reference blade: section
 properties against PreComp and the published data, and a 20 m segment against
-CalculiX. Run them all with `python examples/run_all.py`.
+CalculiX. Example 26 compares skins meshed on the mould line with offset laminates
+and on their mid-surface. Run them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
@@ -373,7 +382,7 @@ The test suite includes:
 - The analysis is linear and small-deflection.
 - Progressive damage is ply-by-ply stiffness knockdown (`SmearedCrackDegradation`), by design. There is no crack-band regularisation by fracture energy, cohesive zone or continuum damage mechanics, so post-failure softening is not mesh-objective. The knockdown is meant for first-ply-to-last-ply load paths and stiffness loss, not for crack growth.
 - Tri3, Quad4 and Quad8 are flat facets (warped elements raise a warning); use `quad8_curved` or `tri6` where curvature matters. Tri6 still shows some membrane locking on strongly curved shells.
-- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there (example 24 shows it on the IEA 15 MW blade).
+- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there, or mesh the skins on their mid-surface with `mesh_surface="mid"`, which brings every element to within 0.4% (examples 24 and 26).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
 - `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time.
