@@ -4,13 +4,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SRC = Path(__file__).resolve().parents[1] / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from laminate_modelling_package import (  # noqa: E402
     DOF,
     BoundaryConditions,
+    EnrichedDOF,
     FEAMesh,
     Laminate,
     create_default_library,
@@ -33,12 +34,16 @@ def aluminium(library):
 
 
 def simply_supported(mesh: FEAMesh, a: float, b: float, hard: bool = True) -> BoundaryConditions:
-    """w = 0 on all edges (hard SS also fixes the tangential rotation) plus in-plane rigid-body restraint."""
+    """w = 0 on all edges plus in-plane rigid-body restraint.
+
+    Hard SS also fixes the tangential rotation and the tangential enrichment amplitudes
+    (zig-zag / interface displacements along the edge), which is the Navier condition.
+    """
     bcs = BoundaryConditions()
     for n in mesh.nodes_on_line(0, 0.0) + mesh.nodes_on_line(0, a):
-        bcs.fix([n], [DOF.UZ] + ([DOF.RX] if hard else []))
+        bcs.fix([n], [DOF.UZ] + ([DOF.RX, EnrichedDOF.Y] if hard else []))
     for n in mesh.nodes_on_line(1, 0.0) + mesh.nodes_on_line(1, b):
-        bcs.fix([n], [DOF.UZ] + ([DOF.RY] if hard else []))
+        bcs.fix([n], [DOF.UZ] + ([DOF.RY, EnrichedDOF.X] if hard else []))
     bcs.fix([mesh.closest_node((0.0, 0.0))], [DOF.UX, DOF.UY])
     bcs.fix([mesh.closest_node((a, 0.0))], [DOF.UY])
     return bcs
@@ -78,3 +83,17 @@ def navier_fsdt_centre(D: np.ndarray, As: np.ndarray, a: float, b: float, q: flo
             W = np.linalg.solve(K, np.array([qmn, 0.0, 0.0]))[0]
             w += W * np.sin(m * np.pi / 2) * np.sin(n * np.pi / 2)
     return w
+
+
+def navier_clpt_centre_moments(D: np.ndarray, a: float, b: float, q: float, terms: int = 199) -> np.ndarray:
+    """Centre bending moments [Mx, My] of the simply supported specially orthotropic plate (Navier)."""
+    Mx = My = 0.0
+    for m in range(1, terms + 1, 2):
+        for n in range(1, terms + 1, 2):
+            al, be = m * np.pi / a, n * np.pi / b
+            W = 16 * q / (np.pi**2 * m * n) / (D[0, 0] * al**4 + 2 * (D[0, 1] + 2 * D[2, 2]) * al**2 * be**2 + D[1, 1] * be**4)
+            s = np.sin(m * np.pi / 2) * np.sin(n * np.pi / 2)
+            # kappa = -w,xx etc. for w = W sin sin  ->  kx = al^2 W s, ky = be^2 W s
+            Mx += (D[0, 0] * al**2 + D[0, 1] * be**2) * W * s
+            My += (D[0, 1] * al**2 + D[1, 1] * be**2) * W * s
+    return np.array([Mx, My])

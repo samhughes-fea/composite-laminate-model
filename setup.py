@@ -4,6 +4,8 @@ Editable install for development:
     pip install -e .            # core (NumPy only)
     pip install -e .[sparse]    # with SciPy sparse solver
     pip install -e .[dev]       # with SciPy and pytest
+    pip install -e .[gmsh]      # with Gmsh meshing
+    pip install -e .[examples]  # with SciPy, matplotlib and Gmsh for examples/
 """
 
 from pathlib import Path
@@ -24,12 +26,15 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     url="https://github.com/samhughes-fea/composite-laminate-fea",
-    packages=find_packages(exclude=("tests", "tests.*")),
+    package_dir={"": "src"},
+    packages=find_packages("src"),
     python_requires=">=3.9",
     install_requires=["numpy>=1.22"],
     extras_require={
         "sparse": ["scipy>=1.8"],
-        "dev": ["scipy>=1.8", "pytest>=7"],
+        "gmsh": ["gmsh>=4.11"],
+        "dev": ["scipy>=1.8", "pytest>=7", "gmsh>=4.11"],
+        "examples": ["scipy>=1.8", "matplotlib>=3.5", "gmsh>=4.11"],
     },
     entry_points={"console_scripts": ["laminate-benchmarks=run_solver_benchmarks:cli"]},
     py_modules=["run_solver_benchmarks"],
