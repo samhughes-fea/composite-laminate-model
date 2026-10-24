@@ -25,7 +25,7 @@ sets for ply-by-ply definitions (spar-cap ply drops along the span, for example)
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -203,6 +203,24 @@ class BladeMesh:
         """Nodes of the cross-section at span position ``z`` (a mesh section)."""
         return [n for n in self.node_sets["all"] if abs(self.mesh.node_coordinates(n)[2] - z) <= tol]
 
+    def to_mid_surface(self, smoothing: Optional[float] = None) -> "BladeMesh":
+        """The same blade meshed on the skin laminates' mid-surface instead of the mould line.
+
+        Each skin node moves along the section normal by the offset of the laminates
+        around it (inward by half the skin thickness for skins on the outer mould line),
+        so the skin laminates need no offset. The shift is averaged over the elements at
+        each node and then smoothed along the skin with a hat kernel ``smoothing`` long
+        (two of the thickest skins by default), so the surface steps gently across
+        thickness changes: region boundaries, spar-cap edges and ply drops applied with a
+        ``Layup``. Elements in a blend keep the small residual offset that puts their
+        plies where they were; elsewhere the offset is zero. Web nodes are re-spaced
+        between their joints, so the webs end on the skins' mid-surfaces.
+
+        Nodes move within the cross-section plane (z is kept), so the root, tip and
+        mesh sections stay where they were. Apply a ``Layup`` before calling this.
+        """
+        return _mid_surface(self, smoothing)
+
 
 class BladeBuilder:
     """Shell model of a blade or wing segment: skins, spar caps and shear webs.
@@ -220,8 +238,10 @@ class BladeBuilder:
     n_span:
         Elements along the span (an int), or increasing span fractions 0..1.
     element:
-        ``"quad4"`` (default), ``"quad8"`` or ``"quad8_curved"``. Quadratic elements
-        put their mid-side nodes on the airfoil surface.
+        ``"quad8_curved"`` (default), ``"quad8"`` or ``"quad4"``. Quadratic elements
+        put their mid-side nodes on the airfoil surface. Flat facets (``"quad4"``,
+        ``"quad8"``) under-predict the torsional stiffness of thick-walled sections
+        with offset skins, so keep the default where torsion matters.
     trailing_edge:
         ``"auto"`` joins the surfaces at a sharp trailing edge and adds a flat
         ``te_web`` across a blunt one; ``"web"`` always adds it.
@@ -231,6 +251,14 @@ class BladeBuilder:
         element's normal (outward on the skins), so the same angle on the suction and
         pressure sides is mirrored when seen from one side of the blade: equal angles
         give extension-twist coupling, opposite angles bend-twist coupling.
+    mesh_surface:
+        ``"outer"`` (default) meshes the skins on the outer mould line and offsets
+        their laminates (see ``skin_reference``). ``"mid"`` meshes them on the
+        laminates' mid-surface, smoothed across thickness changes over
+        ``mid_surface_smoothing`` (see ``BladeMesh.to_mid_surface``), with the webs
+        between the skins' mid-surfaces. Flat facets keep the torsional stiffness of
+        thick sections on the mid-surface; the outer mould line keeps the true outer
+        geometry for pressures and contact with the mould.
     """
 
     def __init__(
@@ -239,13 +267,19 @@ class BladeBuilder:
         regions: Sequence[SkinRegion],
         webs: Sequence[ShearWeb] = (),
         n_span: Union[int, Sequence[float]] = 10,
-        element: str = "quad4",
+        element: str = "quad8_curved",
         skin_reference: str = "outer",
         trailing_edge: str = "auto",
         te_web_elements: int = 2,
         material_axis=(0.0, 0.0, 1.0),
+        mesh_surface: str = "outer",
+        mid_surface_smoothing: Optional[float] = None,
     ):
         self.material_axis = material_axis
+        if mesh_surface not in ("outer", "mid"):
+            raise ValueError("mesh_surface must be 'outer' or 'mid'")
+        self.mesh_surface = mesh_surface
+        self.mid_surface_smoothing = mid_surface_smoothing
         self.stations = tuple(sorted(stations, key=lambda s: s.z))
         if len(self.stations) < 2:
             raise ValueError("a blade needs at least two stations")
@@ -476,7 +510,129 @@ class BladeBuilder:
         sets.update(web_nodes)
         sets.update(joint)
         elements["all"] = mesh.element_ids
-        return BladeMesh(mesh, sets, elements, self.stations, z0 + sf * (z1 - z0))
+        blade = BladeMesh(mesh, sets, elements, self.stations, z0 + sf * (z1 - z0))
+        if self.mesh_surface == "mid":
+            blade = blade.to_mid_surface(self.mid_surface_smoothing)
+        return blade
+
+
+# ---------------------------------------------------------------------------
+# Mid-surface meshes
+# ---------------------------------------------------------------------------
+def _node_normals(mesh, element_ids) -> Dict[int, np.ndarray]:
+    """Area-weighted mean element normal at each node, projected into the section plane."""
+    acc: Dict[int, np.ndarray] = {}
+    for eid in element_ids:
+        e = mesh.element(eid)
+        n = np.asarray(e.frame)[2] * e.area
+        for nid in e.node_ids:
+            acc[nid] = acc.get(nid, 0.0) + n
+    out = {}
+    for nid, v in acc.items():
+        v = np.array([v[0], v[1], 0.0])
+        out[nid] = v / max(np.linalg.norm(v), 1e-300)
+    return out
+
+
+def _smooth_on_surface(mesh, element_ids, values: Dict[int, float], weights: Dict[int, float],
+                       length: float) -> Dict[int, float]:
+    """Hat-kernel average of nodal values over surface paths shorter than ``length``."""
+    if length <= 0.0:
+        return dict(values)
+    try:
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import dijkstra
+    except ImportError:  # pragma: no cover - SciPy is an optional dependency
+        return dict(values)
+    ids = sorted(values)
+    index = {n: k for k, n in enumerate(ids)}
+    rows, cols, dist = [], [], []
+    for eid in element_ids:
+        nodes = [n for n in mesh.element(eid).node_ids if n in index]
+        for a in nodes:
+            for b in nodes:
+                if a < b:
+                    d = float(np.linalg.norm(mesh.node_coordinates(a) - mesh.node_coordinates(b)))
+                    rows += [index[a], index[b]]
+                    cols += [index[b], index[a]]
+                    dist += [d, d]
+    graph = coo_matrix((dist, (rows, cols)), shape=(len(ids), len(ids))).tocsr()
+    w = np.array([weights[n] for n in ids])
+    v = np.array([values[n] for n in ids])
+    out = np.empty(len(ids))
+    for start in range(0, len(ids), 256):  # in blocks: the distance matrix is dense
+        block = np.arange(start, min(start + 256, len(ids)))
+        D = dijkstra(graph, directed=False, indices=block, limit=length)
+        W = np.where(np.isfinite(D), 1.0 - D / length, 0.0) * w[None, :]
+        out[block] = (W @ v) / W.sum(axis=1)
+    return dict(zip(ids, out))
+
+
+def _mid_surface(blade: BladeMesh, smoothing: Optional[float]) -> BladeMesh:
+    from .laminate_solver_pipeline import FEAMesh
+
+    mesh = blade.mesh
+    skin = list(blade.element_sets.get("skin", []))
+    if not skin:
+        return blade
+    thick = max(mesh.element(e).laminate.thickness for e in skin)
+    length = 2.0 * thick if smoothing is None else float(smoothing)
+
+    # the shift of each skin node: the offset of the laminates around it, area-weighted
+    normals = _node_normals(mesh, skin)
+    total: Dict[int, float] = {}
+    area: Dict[int, float] = {}
+    for eid in skin:
+        e = mesh.element(eid)
+        w = e.area / len(e.node_ids)
+        for nid in e.node_ids:
+            total[nid] = total.get(nid, 0.0) + w * e.laminate.offset
+            area[nid] = area.get(nid, 0.0) + w
+    shift = {n: total[n] / area[n] for n in total}
+    shift = _smooth_on_surface(mesh, skin, shift, area, length)
+
+    xyz = {n: mesh.node_coordinates(n).copy() for n in mesh.node_ids}
+    for n, d in shift.items():
+        xyz[n] = xyz[n] + d * normals[n]
+
+    # web nodes: same fraction of the way between their (moved) joints at the same z
+    skin_nodes = set(shift)
+    for name in blade.node_sets:
+        if f"{name}_ss" not in blade.node_sets or f"{name}_ps" not in blade.node_sets:
+            continue
+        top = {round(float(mesh.node_coordinates(n)[2]), 9): n for n in blade.node_sets[f"{name}_ss"]}
+        bot = {round(float(mesh.node_coordinates(n)[2]), 9): n for n in blade.node_sets[f"{name}_ps"]}
+        for n in blade.node_sets[name]:
+            if n in skin_nodes:
+                continue
+            p = mesh.node_coordinates(n)
+            z = round(float(p[2]), 9)
+            a, b = mesh.node_coordinates(bot[z]), mesh.node_coordinates(top[z])
+            f = float(np.dot(p - a, b - a) / max(np.dot(b - a, b - a), 1e-300))
+            xyz[n] = xyz[bot[z]] + f * (xyz[top[z]] - xyz[bot[z]])
+
+    new = FEAMesh(mesh.hygrothermal_engine, mesh.element_registry, mesh.solid_registry)
+    for n in mesh.node_ids:
+        new.add_node(n, xyz[n])
+    skin_set = set(skin)
+    for e in mesh.elements:
+        lam = e.laminate
+        if e.element_id in skin_set:
+            # the part of the node moves along this element's normal
+            e3 = np.asarray(e.frame)[2]
+            moved = float(np.mean([shift[n] * float(np.dot(normals[n], e3)) for n in e.node_ids]))
+            residual = lam.offset - moved
+            lam = lam.with_offset(0.0 if abs(residual) < 1e-9 * max(lam.thickness, 1e-300) else residual)
+        coords = np.array([xyz[n] for n in e.node_ids])
+        try:
+            moved_element = type(e)(e.element_id, e.node_ids, coords, lam, e._kinematics, **e._options())
+        except ValueError as exc:
+            raise ValueError(f"Element {e.element_id} folds over on the mid-surface (a narrow element between "
+                             f"skins of different thickness); smooth over a longer length than {length:g} "
+                             "(mid_surface_smoothing) or widen the element") from exc
+        new.insert_element(moved_element)
+    return BladeMesh(new, {k: list(v) for k, v in blade.node_sets.items()},
+                     {k: list(v) for k, v in blade.element_sets.items()}, blade.stations, blade.span_positions)
 
 
 # ---------------------------------------------------------------------------

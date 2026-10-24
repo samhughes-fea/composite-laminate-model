@@ -376,7 +376,8 @@ class FEAMesh:
         """Structured nx-by-ny Quad4 mesh in the xy-plane (see ``RectangularPlateBuilder``)."""
         from .laminate_mesh_builders import RectangularPlateBuilder
 
-        return RectangularPlateBuilder(length_x, length_y, nx, ny, origin=origin).build(laminate, kinematics, **element_options)
+        return RectangularPlateBuilder(length_x, length_y, nx, ny, origin=origin, element="quad4").build(
+            laminate, kinematics, **element_options)
 
 
 # ---------------------------------------------------------------------------

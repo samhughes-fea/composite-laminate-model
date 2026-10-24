@@ -13,7 +13,7 @@ shell model is checked against a beam built from its own section properties.
 | Item | Value |
 |---|---|
 | Section | NACA 4421 (cambered), 1.5 m chord, pitch axis at 30% chord |
-| Segment | 8 m prismatic, Quad4 FSDT, 24 elements along the span |
+| Segment | 8 m prismatic, curved Quad8 FSDT (the default), 24 elements along the span |
 | Regions | LE panel 0–15% chord, spar cap 15–45%, TE panel 45–100%, webs at 15% and 45% |
 | Sandwich panels | E-glass/epoxy faces [45/−45/0] and [0/−45/45], 0.5 mm plies; PVC foam (E = 85 MPa) 10 mm in the LE panel, 15 mm in the TE panel |
 | Spar caps | [±45 / 16 × 1 mm UD / ∓45] E-glass/epoxy |
@@ -76,15 +76,15 @@ It takes about two minutes, most of it writing the ply-by-ply VTK file.
   wide between the aft web and the trailing edge, bulge under the surface
   pressures by about 2 mm, and the trailing edge drops by 3 mm. A beam model
   assumes none of this.
-- **Middle:** flap deflection reaches 458 mm in the shell and 445 mm in the beam
+- **Middle:** flap deflection reaches 457 mm in the shell and 443 mm in the beam
   (3% apart), edge deflection 11.7 mm and 10.7 mm. The beam leaves out shear
   deformation of the webs and the panel distortion, so it is slightly stiffer. Tip
-  twist is 0.55° in the shell and 0.61° in the beam: the clamp's warping restraint
+  twist is 0.56° in the shell and 0.63° in the beam: the clamp's warping restraint
   stiffens the shell in torsion near the root.
 - **Right:** the worst Tsai-Wu index beyond the root boundary layer. The spar caps
-  (0.41) and webs (0.39) carry the most; the panels are lower (0.27 to 0.28) and
+  (0.37) and webs (0.36) carry the most; the panels are lower (0.26 to 0.28) and
   the foam cores lower still (0.04 to 0.06). In the first chord from the clamp the
-  indices are 1.5 to 2.5 times higher (0.67 in the LE panel faces).
+  indices are 1.3 to 2.3 times higher (0.64 in the LE panel faces).
 
 Open `vtk/blade_segment.vtu` in ParaView for the deformed shape and stress
 resultants, and `vtk/blade_segment_plies.vtu` for each ply's failure index.

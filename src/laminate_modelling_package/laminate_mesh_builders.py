@@ -4,9 +4,9 @@ Builders create the nodes and elements of simple geometries and record named nod
 sets for the edges, so boundary conditions and line loads can be applied by name.
 General geometry is meshed with Gmsh (``laminate_gmsh``).
 
-``element`` selects the element type: ``"quad4"`` (default), ``"tri3"`` (each cell
-split along its diagonal), ``"quad8"`` (flat 8-node), ``"quad8_curved"`` (curved
-8-node shell) or ``"tri6"`` (curved 6-node triangles). Quadratic elements put their
+``element`` selects the element type: ``"quad8_curved"`` (curved 8-node shell, the
+default), ``"quad4"``, ``"tri3"`` (each cell split along its diagonal), ``"quad8"``
+(flat 8-node) or ``"tri6"`` (curved 6-node triangles). Quadratic elements put their
 mid-side nodes on the exact geometry, so the curved elements follow it.
 """
 
@@ -134,7 +134,7 @@ class RectangularPlateBuilder:
     nx: int
     ny: int
     origin: Sequence[float] = (0.0, 0.0, 0.0)
-    element: str = "quad4"
+    element: str = "quad8_curved"
 
     def build_named(self, laminate: Laminate, kinematics: KinematicModel, **element_options) -> NamedMesh:
         x0, y0, z0 = (list(self.origin) + [0.0, 0.0, 0.0])[:3]
@@ -164,7 +164,7 @@ class CylindricalPanelBuilder:
     n_hoop: int
     phi_start: float = 0.0
     phi_end: float = 90.0
-    element: str = "quad4"
+    element: str = "quad8_curved"
 
     def build_named(self, laminate: Laminate, kinematics: KinematicModel, **element_options) -> NamedMesh:
         span = self.phi_end - self.phi_start

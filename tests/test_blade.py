@@ -13,8 +13,10 @@ from laminate_modelling_package import (
     CylindricalPanelBuilder,
     FSDTModel,
     Laminate,
+    Layup,
     LoadCase,
     Ply,
+    PlyDefinition,
     ShearWeb,
     SkinRegion,
     Station,
@@ -132,6 +134,81 @@ def test_beam_properties_of_a_thin_tube(aluminium, element):
     assert np.allclose(p.shear_centre, 0.0, atol=1e-6) and np.allclose(p.tension_centre, 0.0, atol=1e-6)
     assert p.mass_per_length == pytest.approx(aluminium.density * 2 * np.pi * R * t, rel=tol)
     assert np.allclose(p.bend_twist_coupling, 0.0, atol=1e-6)
+
+
+def _thick_tube_gj_ratio(aluminium, element, reference, t_over_r=0.04, mesh_surface="outer"):
+    """GJ of a thick tube (outer radius 1) over the exact G 2 pi R^3 t, R the mid-wall radius."""
+    R, t = 1.0, t_over_r
+    circle = Airfoil.ellipse(1.0)
+    n = 24 if element == "quad4" else 12
+    blade = BladeBuilder([Station(0, 2 * R, circle, pitch_axis=0.5), Station(8, 2 * R, circle, pitch_axis=0.5)],
+                         [SkinRegion("a", 0, 0.5, n), SkinRegion("b", 0.5, 1.0, n)], n_span=16, element=element,
+                         skin_reference=reference, mesh_surface=mesh_surface).build(Laminate([Ply(aluminium, t)]),
+                                                                                    FSDTModel())
+    G = aluminium.elastic.E1 / (2 * (1 + aluminium.elastic.v12))
+    r_mid = R - 0.5 * t if reference == "outer" else R
+    return beam_section_properties(blade).GJ / (G * 2 * np.pi * r_mid**3 * t)
+
+
+@pytest.mark.parametrize("element", ["quad4", "quad8", "quad8_curved"])
+def test_mid_surface_mesh_keeps_the_torsion_of_a_thick_tube(aluminium, element):
+    assert _thick_tube_gj_ratio(aluminium, element, "outer", 0.06, "mid") == pytest.approx(1.0, abs=0.005)
+
+
+def test_mid_surface_mesh_moves_skins_by_their_offsets_and_reattaches_webs(cfrp):
+    thin = Laminate.from_angles(cfrp, [45, -45, 0, -45, 45], 0.25e-3)        # 1.25 mm
+    cap = Laminate.from_angles(cfrp, [45, -45] + [0] * 20 + [-45, 45], 0.25e-3)  # 6 mm
+    lams = {"le_panel": thin, "te_panel": thin, "spar_cap": cap, "web_fwd": thin, "web_aft": thin}
+    stations = [Station(0, 1.0, Airfoil.naca4("0024"), pitch_axis=0.25), Station(2, 1.0, Airfoil.naca4("0024"),
+                                                                                  pitch_axis=0.25)]
+    outer = BladeBuilder(stations, REGIONS, WEBS, n_span=4, element="quad4").build(lams, FSDTModel())
+    mid = BladeBuilder(stations, REGIONS, WEBS, n_span=4, element="quad4", mesh_surface="mid",
+                       mid_surface_smoothing=0.02).build(lams, FSDTModel())
+    assert mid.mesh.node_ids == outer.mesh.node_ids and mid.element_sets == outer.element_sets
+    # every ply stays where it was: through the thickness, the element's mid-plane is
+    # the old reference surface plus the old offset
+    for eid in outer.elements("skin"):
+        e0, e1 = outer.mesh.element(eid), mid.mesh.element(eid)
+        n0 = np.asarray(e0.frame)[2]
+        p0 = np.asarray(e0.centroid) + e0.laminate.offset * n0
+        p1 = np.asarray(e1.centroid) + e1.laminate.offset * np.asarray(e1.frame)[2]
+        assert abs(np.dot(p1 - p0, n0)) < 0.1 * e0.laminate.thickness
+    # away from the cap edges (and the sharp trailing edge) the skins keep almost no offset
+    small = [abs(mid.mesh.element(e).laminate.offset) < 0.05 * mid.mesh.element(e).laminate.thickness
+             for e in mid.elements("skin")]
+    assert sum(small) > 0.5 * len(small)
+    # sections stay in their planes, and the webs end on the moved skin nodes
+    for n in mid.nodes("root"):
+        assert mid.mesh.node_coordinates(n)[2] == pytest.approx(0.0, abs=1e-12)
+    for n in mid.nodes("web_fwd_ss"):  # on a cap edge: between the two half-thicknesses
+        move = np.linalg.norm(mid.mesh.node_coordinates(n) - outer.mesh.node_coordinates(n))
+        assert 0.5 * thin.thickness < move < 0.5 * cap.thickness
+
+
+def test_mid_surface_after_a_layup_follows_the_ply_drops(cfrp):
+    stations = [Station(0, 1.0, Airfoil.naca4("0024"), pitch_axis=0.25), Station(2, 1.0, Airfoil.naca4("0024"),
+                                                                                  pitch_axis=0.25)]
+    blade = BladeBuilder(stations, REGIONS, WEBS, n_span=8, element="quad4").build(laminates(cfrp), FSDTModel())
+    plies = [PlyDefinition(f"ud{k}", cfrp, 1e-3, 0, elements="spar_cap",
+                           region=lambda x, k=k: x[2] < 2.0 - 0.4 * k) for k in range(4)]
+    Layup(plies, reference="top").apply(blade.mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
+    mid = blade.to_mid_surface(smoothing=0.05)
+    node = lambda z: min(mid.nodes("web_fwd_ss"), key=lambda n: abs(blade.mesh.node_coordinates(n)[2] - z))  # noqa
+    move = lambda z: np.linalg.norm(mid.mesh.node_coordinates(node(z)) - blade.mesh.node_coordinates(node(z)))  # noqa
+    assert move(0.1) > move(1.9)  # the cap is thicker at the root, so its mid-surface sits deeper
+
+
+def test_curved_shells_with_offset_skins_keep_the_torsion_of_a_thick_tube(aluminium):
+    # The 2% left over is the offset skin's area, taken on the outer surface (EA is 2% high too).
+    assert _thick_tube_gj_ratio(aluminium, "quad8_curved", "outer") == pytest.approx(1.0, abs=0.03)
+    assert _thick_tube_gj_ratio(aluminium, "quad4", "mid") == pytest.approx(1.0, abs=0.01)
+
+
+@pytest.mark.xfail(strict=True, reason="known limitation: flat shells (Quad4, flat Quad8) with skins offset from "
+                                       "the reference surface lose torsional stiffness in thick closed sections "
+                                       "(about 22% at t/R = 0.04, 35% at 0.06); use quad8_curved")
+def test_flat_shells_with_offset_skins_keep_the_torsion_of_a_thick_tube(aluminium):
+    assert _thick_tube_gj_ratio(aluminium, "quad4", "outer") == pytest.approx(1.0, abs=0.03)
 
 
 def test_beam_properties_show_bend_twist_coupling_and_offset_centres(cfrp):

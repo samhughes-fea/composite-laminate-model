@@ -39,7 +39,8 @@ def tension(gm, length, nx=1.0e5):
 
 def test_plain_plate_is_all_quads_with_named_edges(cfrp):
     lam = Laminate.from_angles(cfrp, [0, 90, 90, 0], 0.25e-3)
-    gm = GmshPlateBuilder(0.1, 0.05, size=0.01).build(GmshMeshImporter(lam, FSDTModel()))
+    # tension() lumps the edge load as for linear elements
+    gm = GmshPlateBuilder(0.1, 0.05, size=0.01, element="quad4").build(GmshMeshImporter(lam, FSDTModel()))
     mesh = gm.mesh
     assert {"left", "right", "bottom", "top", "plate"} <= set(gm.node_sets)
     assert len(gm.elements("plate")) == len(mesh.elements) > 0

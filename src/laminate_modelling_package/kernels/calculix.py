@@ -136,7 +136,7 @@ class CalculiXDeckWriter:
         if state is not None:
             lines += ["*INITIAL CONDITIONS, TYPE=TEMPERATURE", "NALL, 0."]
         lines += ["*STEP", "*STATIC"]
-        forces = equivalent_nodal_forces(mesh, loads)
+        forces = equivalent_nodal_forces(mesh, loads, body_loads=False)
         cloads = [(n, d, v) for n, vec in sorted(forces.items()) for d, v in enumerate(vec) if v != 0.0]
         if cloads:
             lines.append("*CLOAD")
@@ -146,6 +146,7 @@ class CalculiXDeckWriter:
         if pressures:
             lines.append("*DLOAD")
             lines += [f"{e}, P, {p:.12g}" for e, p in pressures.items()]
+        lines += self._gravity(mesh, loads)
         if state is not None:
             lines += ["*TEMPERATURE", f"NALL, {temperature_load:.12g}"]
         lines += ["*NODE PRINT, NSET=NALL", "U"]
@@ -172,6 +173,29 @@ class CalculiXDeckWriter:
             name = f"SPR{k + 1}"
             lines += [f"*ELEMENT, TYPE=SPRING1, ELSET={name}", f"{first_id + k}, {node}",
                       f"*SPRING, ELSET={name}", str(dof + 1), f"{stiffness:.12g}"]
+        return lines
+
+    @staticmethod
+    def _gravity(mesh, loads) -> List[str]:
+        """Body loads as ``GRAV`` distributed loads.
+
+        CalculiX integrates them over the expanded (3D) elements, so laminate offsets
+        and ply densities are taken into account, and no nodal moments are written
+        (moments on shell nodes need mean-rotation MPCs, which ccx cannot cascade at
+        kinked edges such as a sharp trailing edge).
+        """
+        lines: List[str] = []
+        for body in loads.body_loads:
+            a = np.asarray(body.acceleration, dtype=float)
+            g = float(np.linalg.norm(a))
+            if g == 0.0:
+                continue
+            card = f"GRAV, {g:.12g}, {a[0] / g:.12g}, {a[1] / g:.12g}, {a[2] / g:.12g}"
+            lines.append("*DLOAD")
+            if body.element_ids is None:
+                lines.append(f"EALL, {card}")
+            else:
+                lines += [f"{eid}, {card}" for eid in sorted(body.element_ids)]
         return lines
 
     @staticmethod

@@ -130,7 +130,8 @@ def test_layup_errors_and_uncovered_elements(cfrp, strip):
 
 
 def test_drape_fields_change_the_fibre_angle(cfrp):
-    named = RectangularPlateBuilder(0.1, 0.1, 2, 2).build_named(Laminate.from_angles(cfrp, [0], 1e-4), FSDTModel())
+    named = RectangularPlateBuilder(0.1, 0.1, 2, 2, element="quad4").build_named(
+        Laminate.from_angles(cfrp, [0], 1e-4), FSDTModel())
     mesh = named.mesh
     mesh.set_material_axis((1.0, 1.0, 0.0))  # element material axes at +45 degrees
     layup = Layup([
@@ -162,13 +163,30 @@ def test_ply_failure_reports_each_named_ply(cfrp, strip):
 # ---------------------------------------------------------------------------
 # Curved shells
 # ---------------------------------------------------------------------------
+def _assembled(mesh):
+    n = max(int(d) for e in mesh.elements for d in mesh.element_dofs(e)) + 1
+    K = np.zeros((n, n))
+    for e in mesh.elements:
+        d = mesh.element_dofs(e)
+        K[np.ix_(d, d)] += e.stiffness_matrix()
+    return K
+
+
 @pytest.mark.parametrize("element", ["quad8_curved", "tri6"])
-def test_curved_elements_have_exactly_six_rigid_body_modes(cfrp, element):
-    lam = Laminate.from_angles(cfrp, [0, 45, 90], 0.25e-3)
-    for builder in (RectangularPlateBuilder(0.05, 0.03, 1, 1, element=element),
-                    CylindricalPanelBuilder(0.1, 0.05, 1, 1, 0, 40, element=element)):
-        e = builder.build(lam, FSDTModel()).elements[0]
-        assert zero_modes(e.stiffness_matrix()) == 6
+@pytest.mark.parametrize("angles", [[0, 45, 90], [0, 90, 0]])
+def test_curved_elements_have_exactly_six_rigid_body_modes(cfrp, element, angles):
+    lam = Laminate.from_angles(cfrp, angles, 0.25e-3)
+    for builder in (RectangularPlateBuilder(0.05, 0.03, 2, 1, element=element),
+                    CylindricalPanelBuilder(0.1, 0.05, 2, 1, 0, 40, element=element)):
+        mesh = builder.build(lam, FSDTModel())
+        assert zero_modes(_assembled(mesh)) == 6
+    # One quad on its own: the 2 x 2 membrane rule leaves the serendipity quad's one
+    # non-communicable membrane mode (as in S8R); a second element, or full integration,
+    # removes it.
+    if element == "quad8_curved":
+        one = RectangularPlateBuilder(0.05, 0.03, 1, 1, element=element)
+        assert zero_modes(one.build(lam, FSDTModel()).elements[0].stiffness_matrix()) == 7
+        assert zero_modes(one.build(lam, FSDTModel(), integration="full").elements[0].stiffness_matrix()) == 6
 
 
 def scordelis_lo(element, n):

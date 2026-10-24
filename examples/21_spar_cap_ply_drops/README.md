@@ -15,7 +15,7 @@ results come back per named ply.
 |---|---|
 | Geometry | 10 m segment, root 1.2 m NACA 0024, tip 0.6 m NACA 0018, −6° twist, pitch axis at 35% chord |
 | Regions | LE panel 0–20% chord, spar cap 20–50%, TE panel 50–100%, webs at 20% and 50% |
-| Mesh | Quad4 FSDT, 40 elements along the span |
+| Mesh | Curved Quad8 FSDT (the default), 40 elements along the span |
 | Skins | E-glass/epoxy [45/−45/0/−45/45], 0.5 mm plies |
 | Webs | E-glass/epoxy [45/−45]s |
 | Spar caps | ply book: inner skin [±45], 8 full-length UD plies, 12 more UD plies stopping in pairs at 2, 3, 4, 5, 6 and 7 m, outer skin [∓45/0] |
@@ -71,7 +71,7 @@ It takes about two and a half minutes, most of it writing the ply-by-ply VTK fil
 - **Left:** the cap steps from 22.5 mm to 10.5 mm in six 2 mm steps.
 - **Middle:** the spanwise strain at the mid-plane of the suction-side cap. Between
   drops it falls towards the tip with the bending moment; at each drop the cap
-  loses two plies and the strain steps up by about 8%. The tip deflects 408 mm.
+  loses two plies and the strain steps up by about 8%. The tip deflects 407 mm.
   (The strain is taken at the cap's own mid-plane. The shell reference surface is
   the outer face, and the mid-plane steps inwards at every drop, so strains at the
   reference surface mix in local bending from that step.)
