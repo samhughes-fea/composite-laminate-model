@@ -16,7 +16,7 @@ the transverse stresses recovered from 3D equilibrium.
 | Plate | square, a = S·h with h = 10 mm, S = 4 to 100 |
 | Supports | simply supported (w = 0, tangential rotation and zig-zag amplitude held) |
 | Load | q = q0 sin(πx/a) sin(πy/a) on the top face, q0 = 1 |
-| Mesh | 16 × 16 Quad4 |
+| Mesh | 16 × 16 curved Quad8 (the default element) |
 | Models | `CLPTModel`, `FSDTModel`, `RefinedZigZagModel`, `LayerwiseModel(sublayers=3)` |
 | Reference | `PaganoPlate` (transfer-matrix solution of the 3D equations) |
 
@@ -54,17 +54,17 @@ python examples/17_pagano_benchmark/pagano_benchmark.py
 
 | S | Pagano w̄ | CLPT | FSDT | RZT | Layerwise |
 |---|---|---|---|---|---|
-| 4 | 2.006 | −78.5% | −11.4% | −1.9% | +1.0% |
-| 10 | 0.753 | −42.9% | −11.2% | −1.8% | −0.0% |
-| 20 | 0.516 | −16.7% | −4.9% | −1.0% | −0.2% |
-| 100 | 0.435 | −1.1% | −0.5% | −0.3% | −0.3% |
+| 4 | 2.006 | −78.4% | −11.5% | −1.9% | +0.9% |
+| 10 | 0.753 | −42.7% | −11.1% | −1.7% | +0.1% |
+| 20 | 0.516 | −16.5% | −4.7% | −0.7% | −0.0% |
+| 100 | 0.435 | −0.8% | −0.2% | −0.0% | −0.0% |
 
 - **Left:** CLPT ignores shear deformation and is 79% too stiff at S = 4. FSDT
   fixes most of that but stays 11% stiff, because one rotation for the whole
   stack cannot follow the zig-zag of a soft 90° ply between stiff 0° plies.
   RZT adds one zig-zag function and is within 2%; layerwise with three
   sub-layers per ply is within 1%. All converge on the thin-plate answer (the
-  remaining 0.3% at S = 100 is the mesh).
+  mesh error is below 0.1%).
 - **Middle:** interlaminar shear near a support. Both FSDT and RZT give a
   continuous profile once recovered from equilibrium, but FSDT puts too much
   shear in the middle ply (1.33 against 1.01) because its in-plane stresses are

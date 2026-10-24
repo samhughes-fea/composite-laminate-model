@@ -1,4 +1,4 @@
-# 20 · Load cases and combinations
+# 19 · Load cases and combinations
 
 Design checks need many load cases and factored combinations of them. This
 example applies the four kinds of distributed load the solver supports to a
@@ -12,7 +12,7 @@ design combinations by superposition.
 | Item | Value |
 |---|---|
 | Laminate | [0/45/−45/90/0]2s T300/5208, 0.25 mm plies (5 mm) |
-| Panel | 1000 × 250 mm, 40 × 10 Quad4, FSDT |
+| Panel | 1000 × 250 mm, 40 × 10 curved Quad8 (the default), FSDT |
 | Supports | root clamped, strut at mid-span as a grounded spring k = 500 kN/m |
 | `dead` | self-weight, `add_body_load((0, 0, -9.81))` |
 | `lift` | elliptic pressure p = 1 kPa · √(1 − (x/L)²), a callable |
@@ -20,7 +20,7 @@ design combinations by superposition.
 | `cold` | uniform ΔT = −50 K |
 
 ```bash
-python examples/20_load_combinations/load_combinations.py
+python examples/19_load_combinations/load_combinations.py
 ```
 
 ## Walkthrough

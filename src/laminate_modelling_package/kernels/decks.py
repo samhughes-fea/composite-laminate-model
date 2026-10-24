@@ -111,10 +111,12 @@ class DeckCatalogue:
         return self.materials[material_key(card)][0]
 
 
-def equivalent_nodal_forces(mesh: FEAMesh, load_case: LoadCase) -> Dict[int, np.ndarray]:
+def equivalent_nodal_forces(mesh: FEAMesh, load_case: LoadCase, body_loads: bool = True) -> Dict[int, np.ndarray]:
     """Nodal forces and moments from nodal, line and body loads (consistent element vectors).
 
     Pressures and hygrothermal states are written with the deck's own cards instead.
+    ``body_loads=False`` leaves the body loads out, for decks that write them as
+    accelerations (CalculiX ``GRAV``).
     """
     forces: Dict[int, np.ndarray] = {}
     for (node, dof), value in load_case.nodal_loads.items():
@@ -123,7 +125,7 @@ def equivalent_nodal_forces(mesh: FEAMesh, load_case: LoadCase) -> Dict[int, np.
     assembler = GlobalAssembler(sparse=False)
     if load_case.line_loads:
         vector += assembler.line_load_vector(mesh, load_case)
-    for body in load_case.body_loads:
+    for body in load_case.body_loads if body_loads else ():
         for element in mesh.elements:
             if body.applies_to(element.element_id):
                 vector[mesh.element_dofs(element)] += element.body_load_vector(body.acceleration)

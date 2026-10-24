@@ -147,7 +147,7 @@ def main():
     ax2.set_title(f"'{order[int(np.argmax(values))]}' governs", loc="left")
     ax2.grid(axis="x", visible=False)
     fig.text(0.0, -0.04, f"[0/45/-45/90/0]2s T300/5208 (5 mm), {SPAN * 1e3:.0f} x {CHORD * 1e3:.0f} mm, clamped root, "
-             f"strut k = {STRUT_K / 1e3:.0f} kN/m at mid-span, {NX} x {NY} Quad4, FSDT. Lift p = {P0 / 1e3:.0f} kPa "
+             f"strut k = {STRUT_K / 1e3:.0f} kN/m at mid-span, {NX} x {NY} curved Quad8, FSDT. Lift p = {P0 / 1e3:.0f} kPa "
              f"x sqrt(1 - (x/L)²), tip load {TIP:.0f} N, cold = -50 K.", fontsize=7.5, color=TEXT_SECONDARY)
     fig.tight_layout()
     save(fig, __file__, "load_combinations.png")

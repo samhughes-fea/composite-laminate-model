@@ -125,7 +125,7 @@ class ModelChecker:
     def _thickness(self, mesh, report: ModelReport) -> None:
         thick, clpt = [], []
         span = self._span(mesh)
-        for element in mesh.elements:
+        for element in getattr(mesh, "shell_elements", mesh.elements):
             h = element.laminate.thickness
             if element.characteristic_length < self.element_to_thickness * h:
                 thick.append(element.element_id)

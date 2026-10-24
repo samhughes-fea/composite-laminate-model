@@ -8,12 +8,19 @@ Geometry        Ply, Laminate
 Environment     HygrothermalProperties, HygrothermalState, HygrothermalEngine
 Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel (full or condensed)
 Elements        ShellElement: Quad4ShellElement (alias CompositePlateElement), Tri3ShellElement,
-                Quad8ShellElement; ElementRegistry
+                Quad8ShellElement, CurvedQuad8ShellElement, Tri6ShellElement; ElementRegistry;
+                layered solids LayeredHex8Element, LayeredHex20Element (solid_block,
+                couple_shell_to_solid)
+Lay-up          Layup, PlyDefinition, PlyDrop, ReferenceDirection, AngleField, TabulatedDrape
 Orientation     FixedDirection, CylindricalDirection, FieldDirection
 Solution        FEAMesh, BoundaryConditions, LoadCase, LoadCombination, StructuralGlobalSolver
-Meshing         RectangularPlateBuilder, CylindricalPanelBuilder, GmshPlateBuilder,
-                GmshMeshImporter (optional gmsh dependency)
-Results         ResultsExtractor (Gauss point, element, node, ply and global levels)
+Meshing         BladeBuilder (airfoil skins, spar caps, shear webs; Airfoil, Station,
+                SkinRegion, ShearWeb), RectangularPlateBuilder, CylindricalPanelBuilder,
+                GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
+Connections     add_reference_node, rigid_link (RBE2), distributing_link (RBE3)
+Beam properties beam_section_properties (EA, EI, GJ, couplings, shear/tension centres)
+Results         ResultsExtractor (Gauss point, element, node, ply, solid and global levels);
+                write_vtu, write_pvd, VTKExporter (ParaView output, per-ply cells)
 Post-processing ExactStressRecoverer, EquilibriumStressRecoverer (sigma_z and interlaminar
                 shear from 3D equilibrium), failure criteria (register_criterion,
                 DelaminationOnsetCriterion), SmearedCrackDegradation, ProgressiveDamageAnalysis
@@ -154,9 +161,35 @@ from .laminate_results import (
     NodalField,
     PlyPointField,
     ResultsExtractor,
+    SolidPointField,
     extrapolation_matrix,
 )
 from .laminate_stress_recovery import ExactStressRecoverer, PointStressState, StressRecoverer
+from .laminate_curved_shell import CurvedQuad8ShellElement, CurvedShellElement, Tri6ShellElement
+from .laminate_layup import AngleField, Layup, PlyDefinition, PlyDrop, ReferenceDirection, TabulatedDrape
+from .laminate_solid import (
+    DEFAULT_SOLIDS,
+    LayeredHex8Element,
+    LayeredHex20Element,
+    LayeredSolidElement,
+    SolidPoint,
+    SolidRegistry,
+    couple_shell_to_solid,
+    merge_coincident_nodes,
+    solid_block,
+)
+from .laminate_vtk import VTKExporter, write_pvd, write_vtu
+from .laminate_blade import (
+    Airfoil,
+    BeamSectionProperties,
+    BladeBuilder,
+    BladeMesh,
+    ShearWeb,
+    SkinRegion,
+    Station,
+    beam_section_properties,
+)
+from .laminate_connectors import add_reference_node, distributing_link, rigid_link
 
 __version__ = "1.0.0"
 
