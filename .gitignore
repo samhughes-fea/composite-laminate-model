@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+benchmark_runs/
+*.frd
+*.12d
+*.cvg
+*.sta
+spooles.out
+examples/**/calculix_run/
+examples/**/vtk/
