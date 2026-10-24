@@ -62,7 +62,8 @@ def test_blade_builder_regions_webs_and_normals(cfrp, element):
     af = Airfoil.naca4("0021")
     stations = [Station(0.0, 1.0, af, twist=0.0, pitch_axis=0.3), Station(3.0, 0.7, Airfoil.naca4("0015"), twist=-6.0,
                                                                            pitch_axis=0.3)]
-    blade = BladeBuilder(stations, REGIONS, WEBS, n_span=6, element=element).build(laminates(cfrp), FSDTModel())
+    blade = BladeBuilder(stations, REGIONS, WEBS, n_span=6, element=element, mesh_surface="outer").build(
+        laminates(cfrp), FSDTModel())
     mesh = blade.mesh
     sets = blade.element_sets
     for name in ("le_panel_ss", "le_panel_ps", "spar_cap_ss", "spar_cap_ps", "te_panel", "web_fwd", "web_aft",
@@ -161,9 +162,11 @@ def test_mid_surface_mesh_moves_skins_by_their_offsets_and_reattaches_webs(cfrp)
     lams = {"le_panel": thin, "te_panel": thin, "spar_cap": cap, "web_fwd": thin, "web_aft": thin}
     stations = [Station(0, 1.0, Airfoil.naca4("0024"), pitch_axis=0.25), Station(2, 1.0, Airfoil.naca4("0024"),
                                                                                   pitch_axis=0.25)]
-    outer = BladeBuilder(stations, REGIONS, WEBS, n_span=4, element="quad4").build(lams, FSDTModel())
-    mid = BladeBuilder(stations, REGIONS, WEBS, n_span=4, element="quad4", mesh_surface="mid",
-                       mid_surface_smoothing=0.02).build(lams, FSDTModel())
+    outer = BladeBuilder(stations, REGIONS, WEBS, n_span=4, element="quad4", mesh_surface="outer").build(
+        lams, FSDTModel())
+    mid = BladeBuilder(stations, REGIONS, WEBS, n_span=4, element="quad4",
+                       mid_surface_smoothing=0.02).build(lams, FSDTModel())  # mid-surface is the default
+    assert outer.surface == "outer" and mid.surface == "mid"
     assert mid.mesh.node_ids == outer.mesh.node_ids and mid.element_sets == outer.element_sets
     # every ply stays where it was: through the thickness, the element's mid-plane is
     # the old reference surface plus the old offset
@@ -188,14 +191,33 @@ def test_mid_surface_mesh_moves_skins_by_their_offsets_and_reattaches_webs(cfrp)
 def test_mid_surface_after_a_layup_follows_the_ply_drops(cfrp):
     stations = [Station(0, 1.0, Airfoil.naca4("0024"), pitch_axis=0.25), Station(2, 1.0, Airfoil.naca4("0024"),
                                                                                   pitch_axis=0.25)]
-    blade = BladeBuilder(stations, REGIONS, WEBS, n_span=8, element="quad4").build(laminates(cfrp), FSDTModel())
     plies = [PlyDefinition(f"ud{k}", cfrp, 1e-3, 0, elements="spar_cap",
                            region=lambda x, k=k: x[2] < 2.0 - 0.4 * k) for k in range(4)]
-    Layup(plies, reference="top").apply(blade.mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
-    mid = blade.to_mid_surface(smoothing=0.05)
-    node = lambda z: min(mid.nodes("web_fwd_ss"), key=lambda n: abs(blade.mesh.node_coordinates(n)[2] - z))  # noqa
-    move = lambda z: np.linalg.norm(mid.mesh.node_coordinates(node(z)) - blade.mesh.node_coordinates(node(z)))  # noqa
+    # the ply book refers to the mould line, as laid in the mould
+    layup = Layup(plies, reference="top")
+    outer = BladeBuilder(stations, REGIONS, WEBS, n_span=8, element="quad4", mesh_surface="outer").build(
+        laminates(cfrp), FSDTModel())
+    layup.apply(outer.mesh, outer.element_sets, element_ids=outer.elements("spar_cap"))
+    mid = outer.to_mid_surface(smoothing=0.05)
+    node = lambda z: min(mid.nodes("web_fwd_ss"), key=lambda n: abs(outer.mesh.node_coordinates(n)[2] - z))  # noqa
+    move = lambda z: np.linalg.norm(mid.mesh.node_coordinates(node(z)) - outer.mesh.node_coordinates(node(z)))  # noqa
     assert move(0.1) > move(1.9)  # the cap is thicker at the root, so its mid-surface sits deeper
+
+    # the same ply book on a blade built on its mid-surface (the default): moving it
+    # again from the mould line gives the same mesh
+    blade = BladeBuilder(stations, REGIONS, WEBS, n_span=8, element="quad4",
+                         mid_surface_smoothing=0.05).build(laminates(cfrp), FSDTModel())
+    layup.apply(blade.mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
+    again = blade.to_mid_surface()
+    assert again.surface == "mid"
+    for n in mid.mesh.node_ids:
+        assert again.mesh.node_coordinates(n) == pytest.approx(mid.mesh.node_coordinates(n), abs=1e-12)
+    for e in mid.mesh.elements:
+        assert again.mesh.element(e.element_id).laminate.offset == pytest.approx(e.laminate.offset, abs=1e-12)
+    # and redoing it with no new plies changes nothing
+    twice = again.to_mid_surface()
+    for n in mid.mesh.node_ids:
+        assert twice.mesh.node_coordinates(n) == pytest.approx(mid.mesh.node_coordinates(n), abs=1e-12)
 
 
 def test_curved_shells_with_offset_skins_keep_the_torsion_of_a_thick_tube(aluminium):

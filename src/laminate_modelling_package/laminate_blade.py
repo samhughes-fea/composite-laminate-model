@@ -16,10 +16,14 @@ Node sets: ``root`` and ``tip`` (end sections), ``le``, ``te``, ``<web>`` (web n
 ``<web>_ss`` / ``<web>_ps`` (web-to-skin joint lines) and ``all``.
 
 Laminates are given per region and web name; ``<region>_ss`` / ``<region>_ps``
-override a side. Skins are referenced on the outer mould line by default
+override a side. Skins are laid up from the outer mould line by default
 (``skin_reference="outer"``): the laminate grows inward from the airfoil surface, as
-it does from a blade mould. A ``Layup`` can be applied afterwards with the element
-sets for ply-by-ply definitions (spar-cap ply drops along the span, for example).
+it does from a blade mould. The skins are then meshed on the laminates' mid-surface
+(``mesh_surface="mid"``, the default), so flat facets keep the torsional stiffness
+of thick sections; ``mesh_surface="outer"`` keeps the nodes on the mould line and
+offsets the laminates instead. A ``Layup`` can be applied afterwards with the element
+sets for ply-by-ply definitions (spar-cap ply drops along the span, for example);
+call ``blade.to_mid_surface()`` after it so the mid-surface follows the new plies.
 """
 
 from __future__ import annotations
@@ -186,6 +190,16 @@ class BladeMesh:
     element_sets: Dict[str, List[int]] = field(default_factory=dict)
     stations: Tuple[Station, ...] = ()
     span_positions: np.ndarray = field(default_factory=lambda: np.zeros(0))  # element-edge sections
+    # the same blade on the outer mould line, kept by a mid-surface mesh so that
+    # ``to_mid_surface`` can redo the move after a ``Layup`` changes the plies
+    mould_line: Optional["BladeMesh"] = field(default=None, repr=False, compare=False)
+    _mid_laminates: Dict[int, Laminate] = field(default_factory=dict, repr=False, compare=False)
+    _smoothing: Optional[float] = field(default=None, repr=False, compare=False)
+
+    @property
+    def surface(self) -> str:
+        """``"mid"`` for skins meshed on their mid-surface, ``"outer"`` on the mould line."""
+        return "mid" if self.mould_line is not None else "outer"
 
     def nodes(self, name: str) -> List[int]:
         try:
@@ -213,11 +227,19 @@ class BladeMesh:
         (two of the thickest skins by default), so the surface steps gently across
         thickness changes: region boundaries, spar-cap edges and ply drops applied with a
         ``Layup``. Elements in a blend keep the small residual offset that puts their
-        plies where they were; elsewhere the offset is zero. Web nodes are re-spaced
+        plies where they were; elsewhere (and wherever it is under 5% of the
+        thickness) the offset is zero. Web nodes are re-spaced
         between their joints, so the webs end on the skins' mid-surfaces.
 
         Nodes move within the cross-section plane (z is kept), so the root, tip and
-        mesh sections stay where they were. Apply a ``Layup`` before calling this.
+        mesh sections stay where they were.
+
+        On a blade that is already on its mid-surface (the ``BladeBuilder`` default),
+        this redoes the move from the mould line: elements whose laminate was replaced
+        since (by a ``Layup``, referenced to the mould line as laid in the mould) take
+        their new plies, the others keep their original ones, and ``smoothing``
+        defaults to the length used the first time. So after applying a ``Layup`` to
+        a mid-surface blade, call ``blade = blade.to_mid_surface()``.
         """
         return _mid_surface(self, smoothing)
 
@@ -241,7 +263,8 @@ class BladeBuilder:
         ``"quad8_curved"`` (default), ``"quad8"`` or ``"quad4"``. Quadratic elements
         put their mid-side nodes on the airfoil surface. Flat facets (``"quad4"``,
         ``"quad8"``) under-predict the torsional stiffness of thick-walled sections
-        with offset skins, so keep the default where torsion matters.
+        if the skins stay on the mould line with offset laminates
+        (``mesh_surface="outer"``); on the mid-surface (the default) they do not.
     trailing_edge:
         ``"auto"`` joins the surfaces at a sharp trailing edge and adds a flat
         ``te_web`` across a blunt one; ``"web"`` always adds it.
@@ -252,13 +275,15 @@ class BladeBuilder:
         pressure sides is mirrored when seen from one side of the blade: equal angles
         give extension-twist coupling, opposite angles bend-twist coupling.
     mesh_surface:
-        ``"outer"`` (default) meshes the skins on the outer mould line and offsets
-        their laminates (see ``skin_reference``). ``"mid"`` meshes them on the
-        laminates' mid-surface, smoothed across thickness changes over
-        ``mid_surface_smoothing`` (see ``BladeMesh.to_mid_surface``), with the webs
-        between the skins' mid-surfaces. Flat facets keep the torsional stiffness of
-        thick sections on the mid-surface; the outer mould line keeps the true outer
-        geometry for pressures and contact with the mould.
+        ``"mid"`` (default) meshes the skins on the laminates' mid-surface, smoothed
+        across thickness changes over ``mid_surface_smoothing`` (see
+        ``BladeMesh.to_mid_surface``), with the webs between the skins'
+        mid-surfaces. Every element type then keeps the torsional stiffness of thick
+        closed sections. ``"outer"`` meshes the skins on the outer mould line and
+        offsets their laminates (see ``skin_reference``), which keeps the true outer
+        geometry but makes flat facets (``"quad4"``, ``"quad8"``) too soft in torsion
+        where the skins are thick. After a ``Layup``, call ``blade.to_mid_surface()``
+        so the mid-surface follows the new plies.
     """
 
     def __init__(
@@ -272,7 +297,7 @@ class BladeBuilder:
         trailing_edge: str = "auto",
         te_web_elements: int = 2,
         material_axis=(0.0, 0.0, 1.0),
-        mesh_surface: str = "outer",
+        mesh_surface: str = "mid",
         mid_surface_smoothing: Optional[float] = None,
     ):
         self.material_axis = material_axis
@@ -568,7 +593,37 @@ def _smooth_on_surface(mesh, element_ids, values: Dict[int, float], weights: Dic
     return dict(zip(ids, out))
 
 
+RESIDUAL_OFFSET_TOL = 0.05  # residual offsets below this fraction of the thickness are dropped
+
+
 def _mid_surface(blade: BladeMesh, smoothing: Optional[float]) -> BladeMesh:
+    if blade.mould_line is None:
+        return _move_to_mid_surface(blade, smoothing)
+    # redo the move from the mould line, with the plies of any laminate replaced since
+    source = blade.mould_line
+    if smoothing is None:
+        smoothing = blade._smoothing
+    outer = _copy_mesh(source.mesh)
+    for e in blade.mesh.elements:
+        if blade._mid_laminates.get(e.element_id) is not e.laminate:
+            outer.replace_element(outer.element(e.element_id).with_laminate(e.laminate))
+    return _move_to_mid_surface(BladeMesh(outer, {k: list(v) for k, v in source.node_sets.items()},
+                                          {k: list(v) for k, v in source.element_sets.items()},
+                                          source.stations, source.span_positions), smoothing)
+
+
+def _copy_mesh(mesh):
+    from .laminate_solver_pipeline import FEAMesh
+
+    new = FEAMesh(mesh.hygrothermal_engine, mesh.element_registry, mesh.solid_registry)
+    for n in mesh.node_ids:
+        new.add_node(n, mesh.node_coordinates(n).copy())
+    for e in mesh.elements:
+        new.insert_element(e)
+    return new
+
+
+def _move_to_mid_surface(blade: BladeMesh, smoothing: Optional[float]) -> BladeMesh:
     from .laminate_solver_pipeline import FEAMesh
 
     mesh = blade.mesh
@@ -622,7 +677,11 @@ def _mid_surface(blade: BladeMesh, smoothing: Optional[float]) -> BladeMesh:
             e3 = np.asarray(e.frame)[2]
             moved = float(np.mean([shift[n] * float(np.dot(normals[n], e3)) for n in e.node_ids]))
             residual = lam.offset - moved
-            lam = lam.with_offset(0.0 if abs(residual) < 1e-9 * max(lam.thickness, 1e-300) else residual)
+            # residuals under 5% of the thickness are rounding of the smoothing: dropping
+            # them keeps neighbouring elements on one shell section (CalculiX expands
+            # shells with differing offsets at a node into knots, and runs out of nodes
+            # when there are many)
+            lam = lam.with_offset(0.0 if abs(residual) < RESIDUAL_OFFSET_TOL * lam.thickness else residual)
         coords = np.array([xyz[n] for n in e.node_ids])
         try:
             moved_element = type(e)(e.element_id, e.node_ids, coords, lam, e._kinematics, **e._options())
@@ -632,7 +691,10 @@ def _mid_surface(blade: BladeMesh, smoothing: Optional[float]) -> BladeMesh:
                              "(mid_surface_smoothing) or widen the element") from exc
         new.insert_element(moved_element)
     return BladeMesh(new, {k: list(v) for k, v in blade.node_sets.items()},
-                     {k: list(v) for k, v in blade.element_sets.items()}, blade.stations, blade.span_positions)
+                     {k: list(v) for k, v in blade.element_sets.items()}, blade.stations, blade.span_positions,
+                     mould_line=BladeMesh(_copy_mesh(mesh), blade.node_sets, blade.element_sets, blade.stations,
+                                          blade.span_positions),
+                     _mid_laminates={e.element_id: e.laminate for e in new.elements}, _smoothing=smoothing)
 
 
 # ---------------------------------------------------------------------------

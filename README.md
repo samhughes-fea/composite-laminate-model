@@ -151,22 +151,25 @@ props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_cou
   or `Airfoil(points)` for any coordinates (Selig order), splined so nodes are spaced
   evenly along the arc. Blunt trailing edges get a closing web.
 - **Laminates.** Skin normals point outwards and skins grow inwards from the outer
-  mould line (`skin_reference="outer"`); the 0° direction follows the span.
+  mould line (`skin_reference="outer"`), then are meshed on their mid-surface (see
+  Mesh surface); the 0° direction follows the span.
   Different angles on the two caps give bend-twist or extension-twist coupling.
 - **Sets.** Element sets per region and side (`spar_cap_ss`, `te_panel`, `skin`,
   `webs`, ...) and node sets (`root`, `tip`, `le`, `te`, each web) for loads,
   supports and results.
-- **Elements.** `element="quad8_curved"` (default), `"quad8"` or `"quad4"`. With
-  skins on the outer mould line, the flat elements lose torsional stiffness in
-  thick-walled sections (see Limitations).
-- **Mesh surface.** `mesh_surface="outer"` (default) meshes the skins on the outer
-  mould line and offsets the laminates. `mesh_surface="mid"` meshes them on the
-  laminates' mid-surface instead: skin nodes move inward by the local offset,
-  smoothed along the skin across region edges and ply drops
+- **Elements.** `element="quad8_curved"` (default), `"quad8"` or `"quad4"`. On the
+  default mid-surface mesh all three keep the torsional stiffness of thick-walled
+  sections; with skins left on the mould line, the flat elements lose it (see
+  Limitations).
+- **Mesh surface.** `mesh_surface="mid"` (default) meshes the skins on the
+  laminates' mid-surface: skin nodes move inward from the mould line by the local
+  offset, smoothed along the skin across region edges and ply drops
   (`mid_surface_smoothing`, two of the thickest skins by default), the webs end on
   the moved skins, and the offsets go (small residuals stay in the blends, so the
-  plies keep their place). After a `Layup`, `blade.to_mid_surface()` does the same
-  with the ply-by-ply thicknesses. Example 26 compares the two.
+  plies keep their place). After a `Layup`, call `blade = blade.to_mid_surface()`:
+  it moves the blade again from the mould line with the ply-by-ply thicknesses.
+  `mesh_surface="outer"` keeps the nodes on the mould line and offsets the
+  laminates, for when the true outer geometry matters. Example 26 compares the two.
 
 `add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
 section loads from an aeroelastic code into the model, and measure section motion.
@@ -397,7 +400,8 @@ CalculiX, PreComp and the published IEA 15 MW data (see the
 - The analysis is linear and small-deflection.
 - Progressive damage is ply-by-ply stiffness knockdown (`SmearedCrackDegradation`), by design. There is no crack-band regularisation by fracture energy, cohesive zone or continuum damage mechanics, so post-failure softening is not mesh-objective. The knockdown is meant for first-ply-to-last-ply load paths and stiffness loss, not for crack growth.
 - Tri3, Quad4 and Quad8 are flat facets (warped elements raise a warning); use `quad8_curved` or `tri6` where curvature matters. Tri6 still shows some membrane locking on strongly curved shells.
-- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there, or mesh the skins on their mid-surface with `mesh_surface="mid"`, which brings every element to within 0.4% (examples 24 and 26).
+- Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. `BladeBuilder` therefore meshes skins on their mid-surface by default, which brings every element to within 0.4% (examples 24 and 26); this applies to `mesh_surface="outer"` and to offset laminates on other meshes (Gmsh, plates).
+- Mid-surface blade meshes are inset from the outer mould line by half the skin thickness, so surface pressures act on a slightly smaller perimeter, and the wall area is the mid-wall length × thickness. Thin-wall section tools such as PreComp take the mould-line length × thickness instead, so EA and mass from a mid-surface model are typically 1–2% below PreComp on thick blade sections (example 24).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
 - `beam_section_properties` needs a prismatic segment long enough for the end restraint of warping to die out before the middle fifth, where it measures: about 8 chords for uncoupled layups and 12 for bend-twist-coupled caps (at 6 chords a ±20° cap layup reads EI flap 9% and the coupling 23% high). A tapered blade is handled one station at a time.
