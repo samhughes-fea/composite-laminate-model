@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
 from laminate_modelling_package import (  # noqa: E402
     DOF,
     BoundaryConditions,
+    EnrichedDOF,
     FEAMesh,
     Laminate,
     create_default_library,
@@ -33,12 +34,16 @@ def aluminium(library):
 
 
 def simply_supported(mesh: FEAMesh, a: float, b: float, hard: bool = True) -> BoundaryConditions:
-    """w = 0 on all edges (hard SS also fixes the tangential rotation) plus in-plane rigid-body restraint."""
+    """w = 0 on all edges plus in-plane rigid-body restraint.
+
+    Hard SS also fixes the tangential rotation and the tangential enrichment amplitudes
+    (zig-zag / interface displacements along the edge), which is the Navier condition.
+    """
     bcs = BoundaryConditions()
     for n in mesh.nodes_on_line(0, 0.0) + mesh.nodes_on_line(0, a):
-        bcs.fix([n], [DOF.UZ] + ([DOF.RX] if hard else []))
+        bcs.fix([n], [DOF.UZ] + ([DOF.RX, EnrichedDOF.Y] if hard else []))
     for n in mesh.nodes_on_line(1, 0.0) + mesh.nodes_on_line(1, b):
-        bcs.fix([n], [DOF.UZ] + ([DOF.RY] if hard else []))
+        bcs.fix([n], [DOF.UZ] + ([DOF.RY, EnrichedDOF.X] if hard else []))
     bcs.fix([mesh.closest_node((0.0, 0.0))], [DOF.UX, DOF.UY])
     bcs.fix([mesh.closest_node((a, 0.0))], [DOF.UY])
     return bcs

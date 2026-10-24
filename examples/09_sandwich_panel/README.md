@@ -48,8 +48,8 @@ python examples/09_sandwich_panel/sandwich_panel.py
 
 | Core c [mm] | CLPT | FSDT | RZT | Layerwise | Sandwich theory |
 |---|---|---|---|---|---|
-| 5 | 2.42 | 2.45 | 2.83 | 2.83 | 2.91 |
-| 20 | 0.173 | 0.196 | 0.306 | 0.306 | 0.312 |
+| 5 | 2.42 | 2.45 | 2.88 | 2.88 | 2.91 |
+| 20 | 0.173 | 0.196 | 0.310 | 0.310 | 0.312 |
 | 60 | 0.019 | 0.037 | 0.067 | 0.067 | 0.067 |
 
 Centre deflections are in mm.
@@ -63,7 +63,7 @@ Centre deflections are in mm.
 - **Right:** the transverse shear stress near the support (log scale). FSDT
   puts 0.9 to 1.7 MPa in the skins and only 10 kPa in the core. In a real
   sandwich the core carries the shear at roughly Q/d, which is what RZT and
-  layerwise give (about 60 kPa, uniform through the thickness).
+  layerwise give (about 55 kPa, uniform through the core).
 
 For sandwich structures, use `RefinedZigZagModel` or `LayerwiseModel`. FSDT's
 5/6 shear correction factor is only meant for a single material.

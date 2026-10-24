@@ -217,10 +217,14 @@ class ProgressiveDamageAnalysis:
         for element in mesh.elements:
             u_e = solution.element_displacements(element.element_id)
             state = load_case.state_for(element.element_id)
-            profile = self.recoverer.through_thickness_profile(element, u_e, state=state, points_per_ply=self.points_per_ply)
-            for point in profile:
+            if getattr(element, "IS_SOLID", False):
+                profile = element.through_thickness(u_e, points_per_ply=self.points_per_ply, state=state)
+                stresses = [p.stress_material for p in profile]
+            else:
+                profile = self.recoverer.through_thickness_profile(element, u_e, state=state, points_per_ply=self.points_per_ply)
+                stresses = [p.material_stress_3d() for p in profile]
+            for point, stress in zip(profile, stresses):
                 strength = virgin[element.element_id].plies[point.ply_index].material.strength
-                stress = point.material_stress_3d()
                 result = self.criterion.evaluate(stress, strength)
                 max_index = max(max_index, result.index)
                 damage = self._damage_from(result, stress)

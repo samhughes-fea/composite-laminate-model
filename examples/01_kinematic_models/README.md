@@ -52,17 +52,21 @@ python examples/01_kinematic_models/kinematic_models.py
   the Navier CLPT line within 0.3% at every a/h.
 - **The shear models rise as the plate thickens.** At a/h = 4, FSDT gives
   w̄ = 2.162 against Navier FSDT 2.159 (0.15%). That is 2.5 times the CLPT value.
-- **RZT and layerwise sit just below FSDT** (2.078 at a/h = 4). Both use the
-  shear stiffness from the actual ply stack instead of the 5/6 shear correction
-  factor, so their transverse shear stiffness is slightly higher here.
+- **RZT and layerwise sit above FSDT** (2.308 at a/h = 4, 7% more flexible).
+  Both let each ply rotate on its own (the zig-zag), which FSDT's single
+  rotation cannot do, so they capture the extra shear flexibility of a cross-ply
+  stack. Example 17 checks the same theories against Pagano's exact 3D
+  solution, where RZT and layerwise land within 2% and FSDT is 11% too stiff.
+  For this symmetric stack the two match, because the two middle plies act as
+  one layer.
 - **All four converge** by a/h ≈ 50, so CLPT is enough for thin laminates and
   FSDT or better is needed below about a/h = 20.
 
 | a/h | CLPT | FSDT | RZT | Layerwise | Navier CLPT | Navier FSDT |
 |---|---|---|---|---|---|---|
-| 4 | 0.881 | 2.162 | 2.078 | 2.078 | 0.883 | 2.159 |
-| 10 | 0.880 | 1.103 | 1.088 | 1.088 | 0.883 | 1.105 |
-| 100 | 0.880 | 0.882 | 0.882 | 0.882 | 0.883 | 0.885 |
+| 4 | 0.881 | 2.162 | 2.308 | 2.308 | 0.883 | 2.159 |
+| 10 | 0.880 | 1.103 | 1.140 | 1.140 | 0.883 | 1.105 |
+| 100 | 0.880 | 0.882 | 0.883 | 0.883 | 0.883 | 0.885 |
 
 ## Things to try
 

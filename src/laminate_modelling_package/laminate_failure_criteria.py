@@ -11,7 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Union
+from typing import Callable, Dict, Union
 
 import numpy as np
 
@@ -294,17 +294,80 @@ class HashinCriterion(FailureCriterion):
         return float(best)
 
 
-CRITERIA = {
+class DelaminationOnsetCriterion(FailureCriterion):
+    """Quadratic interlaminar stress criterion for delamination onset (Brewer and Lagace).
+
+        f = (<s3>_+ / Zt)^2 + (t13 / S13)^2 + (t23 / S23)^2
+
+    Only tensile through-thickness stress opens an interface; compression is ignored
+    by default. ``compression_factor`` > 0 lets compression add (s3 / Zc)^2 scaled by
+    that factor for materials where crushing the interface matters. Use it with
+    transverse stresses from ``EquilibriumStressRecoverer``: the constitutive shell
+    stresses carry no s3 and, for FSDT, a poor interlaminar shear.
+    """
+
+    name = "delamination"
+
+    def __init__(self, compression_factor: float = 0.0):
+        if compression_factor < 0.0:
+            raise ValueError("compression_factor must be >= 0")
+        self.compression_factor = float(compression_factor)
+
+    def _terms(self, s, st) -> Dict[str, float]:
+        s3, t23, t13 = s[2], s[3], s[4]
+        if s3 >= 0.0:
+            normal = (s3 / st.Zt) ** 2
+        else:
+            normal = self.compression_factor * (s3 / st.Zc) ** 2
+        return {"normal": float(normal), "shear": float((t13 / st.S13) ** 2 + (t23 / st.S23) ** 2)}
+
+    def evaluate(self, stress, strength):
+        s = _as_stress(stress)
+        index = sum(self._terms(s, strength).values())
+        mode = FailureMode.DELAMINATION if index > 0.0 else FailureMode.NONE
+        # homogeneous quadratic: f(lambda s) = lambda^2 f(s)
+        return FailureResult(self.name, float(index), _quadratic_ratio(index), mode,
+                             {FailureMode.DELAMINATION.value: float(index)})
+
+    def __repr__(self) -> str:
+        return f"DelaminationOnsetCriterion(compression_factor={self.compression_factor})"
+
+
+CriterionFactory = Callable[[], FailureCriterion]
+
+CRITERIA: Dict[str, CriterionFactory] = {
     "max_stress": MaximumStressCriterion,
     "tsai_hill": TsaiHillCriterion,
     "tsai_wu": TsaiWuCriterion,
     "hashin_2d": lambda: HashinCriterion("2d"),
     "hashin_3d": lambda: HashinCriterion("3d"),
+    "delamination": DelaminationOnsetCriterion,
 }
+
+
+def register_criterion(name: str, factory: CriterionFactory, overwrite: bool = False) -> None:
+    """Make a criterion available to ``create_criterion`` (and so to progressive damage) by name.
+
+    ``factory`` is any zero-argument callable returning a ``FailureCriterion``, usually
+    the class itself. Existing names are protected unless ``overwrite`` is True.
+    """
+    if not callable(factory):
+        raise TypeError("factory must be callable")
+    if name in CRITERIA and not overwrite:
+        raise KeyError(f"A criterion named '{name}' is already registered; pass overwrite=True to replace it")
+    CRITERIA[name] = factory
+
+
+def available_criteria() -> list:
+    return sorted(CRITERIA)
 
 
 def create_criterion(name: str) -> FailureCriterion:
     try:
-        return CRITERIA[name]()
+        factory = CRITERIA[name]
     except KeyError as exc:
         raise KeyError(f"Unknown failure criterion '{name}'. Options: {', '.join(CRITERIA)}") from exc
+    criterion = factory()
+    if not isinstance(criterion, FailureCriterion):
+        raise TypeError(f"Factory for '{name}' returned {type(criterion).__name__}, not a FailureCriterion")
+    return criterion

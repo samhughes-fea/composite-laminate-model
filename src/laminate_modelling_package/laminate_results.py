@@ -5,18 +5,19 @@
 1. Gauss point  - generalised strains and section resultants N, M, Q at each
                   integration point; ply stresses and failure indices at any z.
 2. Element      - Gauss-averaged resultants, strain energy split
-                  (membrane / bending / membrane-bending coupling / shear / drilling)
-                  and the worst ply failure index.
+                  (membrane / bending / membrane-bending coupling / enrichment /
+                  shear / drilling) and the worst ply failure index.
 3. Node         - displacements and reactions (exact nodal unknowns); resultants and
-                  ply stresses extrapolated from the Gauss points with a bilinear fit
-                  and averaged over the elements that share each node.
+                  ply stresses extrapolated from the recovery points with each
+                  element's own fit and averaged over the elements sharing each node.
 4. Ply / z      - any of the above evaluated at a chosen ply position.
 5. Global       - total strain energy and its split, external work, applied and
                   reaction force/moment resultants, equilibrium residual, and peak
                   values with their locations.
 
-Gauss points are the most accurate source for stresses (they are where the stiffness
-was integrated); nodal stresses are smoothed for plotting. Section resultants are
+"Gauss points" here are each element's recovery points (2x2 for Quad4 and Quad8,
+three interior points for Tri3). For the bilinear Quad4 the element centroid is the
+most accurate place to read moments; nodal stresses are smoothed for plotting. Section resultants are
 mechanical: [N; M] = ABD [eps0; kappa] - [N_ht; M_ht] and Q = A_s gamma0.
 All strains and resultants are in each element's local shell axes, which coincide
 with global x, y for meshes in the xy-plane.
@@ -32,10 +33,10 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .laminate_failure_criteria import FailureCriterion
-from .laminate_fea_engine import CompositePlateElement, shape_functions
+from .laminate_elements import ShellElement
 from .laminate_hygrothermal import HygrothermalState
 from .laminate_solver_pipeline import LoadCase, SolutionResult
-from .laminate_stress_recovery import ExactStressRecoverer
+from .laminate_stress_recovery import ExactStressRecoverer, StressRecoverer
 
 PLY_POSITIONS = ("bottom", "mid", "top")
 
@@ -88,11 +89,26 @@ class ElementField:
     energy_membrane: np.ndarray
     energy_bending: np.ndarray
     energy_coupling: np.ndarray
+    energy_enrichment: np.ndarray
     energy_shear: np.ndarray
     energy_drilling: np.ndarray
     energy_total: np.ndarray
     max_failure_index: np.ndarray  # NaN when no criterion was given
     critical_ply: np.ndarray  # -1 when no criterion was given
+
+
+@dataclass(frozen=True)
+class SolidPointField:
+    """Ply stresses in layered solids (one row per point; Voigt order [11, 22, 33, 23, 13, 12])."""
+
+    element_ids: np.ndarray
+    ply_index: np.ndarray
+    natural: np.ndarray  # (n, 3) xi, eta, zeta
+    xyz: np.ndarray
+    stress_global: np.ndarray  # (n, 6) [sx, sy, sz, tyz, txz, txy]
+    stress_material: np.ndarray  # (n, 6) [s1, s2, s3, t23, t13, t12]
+    failure_index: np.ndarray
+    failure_mode: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -143,7 +159,7 @@ class ResultsExtractor:
         self,
         solution: SolutionResult,
         load_case: Optional[LoadCase] = None,
-        recoverer: Optional[ExactStressRecoverer] = None,
+        recoverer: Optional[StressRecoverer] = None,
         criterion: Optional[FailureCriterion] = None,
     ):
         self.solution = solution
@@ -154,19 +170,17 @@ class ResultsExtractor:
         self._gauss: Optional[GaussPointField] = None
         self._elements: Optional[ElementField] = None
         self._plies: Optional[PlyPointField] = None
+        self._solid: Optional[SolidPointField] = None
 
     # ------------------------------------------------------------- helpers
-    def _state(self, element: CompositePlateElement) -> HygrothermalState:
+    def _shell_ids(self) -> List[int]:
+        return [e.element_id for e in self.mesh.shell_elements]
+
+    def _state(self, element: ShellElement) -> HygrothermalState:
         return self.load_case.state_for(element.element_id)
 
-    def _section_resultants(self, element, eps0, kappa, gamma0):
-        section = element.section
-        N_ht, M_ht = element.hygrothermal_resultants(self._state(element))
-        NM = section.abd @ np.concatenate([eps0, kappa]) - np.concatenate([N_ht, M_ht])
-        return NM[:3], NM[3:], section.shear @ gamma0
-
     @staticmethod
-    def ply_height(element: CompositePlateElement, ply: int, position: str) -> Tuple[float, str]:
+    def ply_height(element: ShellElement, ply: int, position: str) -> Tuple[float, str]:
         """z coordinate and interface side for a ply position: 'bottom', 'mid', 'top' or a float in [0, 1]."""
         z_b, z_t = element.laminate.ply_bounds()[ply]
         if position == "bottom":
@@ -185,11 +199,13 @@ class ResultsExtractor:
         if self._gauss is not None:
             return self._gauss
         rows = {k: [] for k in ("eid", "idx", "nat", "xyz", "w", "e", "k", "g", "N", "M", "Q")}
-        for element in self.mesh.elements:
+        for element in self.mesh.shell_elements:
             u = self.solution.element_displacements(element.element_id)
+            state = self._state(element)
             for i, (xi, eta, w) in enumerate(element.gauss_points()):
-                eps0, kappa, gamma0 = element.generalized_strains(u, xi, eta)
-                N, M, Q = self._section_resultants(element, eps0, kappa, gamma0)
+                e, s = element.strain_state(u, xi, eta)
+                eps0, kappa, gamma0 = e[:3], e[3:6], s[:2]
+                N, M, Q = element.section_resultants(e, s, state)
                 for key, value in zip(rows, (element.element_id, i, (xi, eta), element.global_coordinates(xi, eta), w, eps0, kappa, gamma0, N, M, Q)):
                     rows[key].append(value)
         a = {k: np.array(v) for k, v in rows.items()}
@@ -211,7 +227,7 @@ class ResultsExtractor:
 
     def _ply_points(self, plies, positions) -> PlyPointField:
         out = {k: [] for k in ("eid", "idx", "ply", "z", "xyz", "sg", "sm", "tg", "tm", "fi", "mode")}
-        for element in self.mesh.elements:
+        for element in self.mesh.shell_elements:
             u = self.solution.element_displacements(element.element_id)
             state = self._state(element)
             ply_ids = range(element.laminate.n_plies) if plies is None else plies
@@ -236,14 +252,14 @@ class ResultsExtractor:
         if self._elements is not None:
             return self._elements
         gp = self.gauss_points()
-        ids = self.mesh.element_ids
+        ids = [e.element_id for e in self.mesh.shell_elements]
         n = len(ids)
         res = {k: np.zeros((n, d)) for k, d in (("N", 3), ("M", 3), ("Q", 2), ("c", 3))}
-        energy = {k: np.zeros(n) for k in ("mem", "bend", "coup", "shear", "drill", "total")}
+        energy = {k: np.zeros(n) for k in ("membrane", "bending", "coupling", "enrichment", "shear", "drilling", "total")}
         area = np.zeros(n)
         fi = np.full(n, np.nan)
         crit = np.full(n, -1, dtype=int)
-        for j, element in enumerate(self.mesh.elements):
+        for j, element in enumerate(self.mesh.shell_elements):
             mask = gp.element_ids == element.element_id
             w = gp.weight[mask]
             area[j] = w.sum()
@@ -251,16 +267,9 @@ class ResultsExtractor:
             res["N"][j] = w @ gp.N[mask] / area[j]
             res["M"][j] = w @ gp.M[mask] / area[j]
             res["Q"][j] = w @ gp.Q[mask] / area[j]
-            s = element.section
-            e0, k0, g0 = gp.eps0[mask], gp.kappa[mask], gp.gamma0[mask]
-            energy["mem"][j] = 0.5 * np.sum(w * np.einsum("ni,ij,nj->n", e0, s.A, e0))
-            energy["bend"][j] = 0.5 * np.sum(w * np.einsum("ni,ij,nj->n", k0, s.D, k0))
-            energy["coup"][j] = np.sum(w * np.einsum("ni,ij,nj->n", e0, s.B, k0))
-            energy["shear"][j] = 0.5 * np.sum(w * np.einsum("ni,ij,nj->n", g0, s.shear, g0))
             u = self.solution.element_displacements(element.element_id)
-            u_local = element.transformation @ u
-            drill = sum(wt * (element.drilling_B(xi, eta) @ u_local) ** 2 for xi, eta, wt in element.gauss_points())
-            energy["drill"][j] = 0.5 * element.drilling_modulus * drill
+            for key, value in element.energy_split(u).items():
+                energy[key][j] = value
             energy["total"][j] = element.strain_energy(u)
         if self.criterion is not None:
             pp = self.ply_points()
@@ -271,21 +280,61 @@ class ResultsExtractor:
                 crit[j] = pp.ply_index[mask][k]
         self._elements = ElementField(
             np.array(ids), res["c"], area, res["N"], res["M"], res["Q"],
-            energy["mem"], energy["bend"], energy["coup"], energy["shear"], energy["drill"], energy["total"], fi, crit,
+            energy["membrane"], energy["bending"], energy["coupling"], energy["enrichment"], energy["shear"],
+            energy["drilling"], energy["total"], fi, crit,
         )
         return self._elements
 
+    # ---------------------------------------------------------- solid level
+    def solid_points(self, positions: Sequence = PLY_POSITIONS) -> SolidPointField:
+        """Ply stresses of every layered solid at its 2x2 in-plane Gauss points.
+
+        ``positions`` are places through each ply: "bottom", "mid", "top" or a fraction
+        in [0, 1]. The default call is cached.
+        """
+        default = tuple(positions) == PLY_POSITIONS
+        if default and self._solid is not None:
+            return self._solid
+        g = 1.0 / np.sqrt(3.0)
+        out = {k: [] for k in ("eid", "ply", "nat", "xyz", "sg", "sm", "fi", "mode")}
+        for element in self.mesh.solid_elements:
+            u = self.solution.element_displacements(element.element_id)
+            state = self._state(element)
+            for k, (a, b) in enumerate(element.ply_zeta_bounds()):
+                for position in positions:
+                    f = {"bottom": 0.0, "mid": 0.5, "top": 1.0}.get(position, position)
+                    zeta = a + float(f) * (b - a)
+                    zeta = min(max(zeta, a + 1e-9), b - 1e-9)  # stay inside ply k
+                    for xi, eta in ((-g, -g), (g, -g), (g, g), (-g, g)):
+                        p = element.stress_at(u, xi, eta, zeta, state)
+                        if self.criterion is not None:
+                            res = self.criterion.evaluate(p.stress_material, element.laminate.plies[k].material.strength)
+                            fi, mode = res.index, res.mode.value
+                        else:
+                            fi, mode = np.nan, ""
+                        for key, value in zip(out, (element.element_id, k, (xi, eta, zeta), p.xyz, p.stress_global,
+                                                    p.stress_material, fi, mode)):
+                            out[key].append(value)
+        a = {k: np.array(v) for k, v in out.items()}
+        if not out["eid"]:
+            a.update(nat=np.zeros((0, 3)), xyz=np.zeros((0, 3)), sg=np.zeros((0, 6)), sm=np.zeros((0, 6)))
+        field_ = SolidPointField(a["eid"], a["ply"], a["nat"], a["xyz"], a["sg"], a["sm"], a["fi"], a["mode"])
+        if default:
+            self._solid = field_
+        return field_
+
     # ---------------------------------------------------------- nodal level
     def _average_to_nodes(self, values_by_element: Dict[int, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        """values_by_element[eid] has shape (n_gauss, k); returns node-averaged (n_nodes, k) and counts."""
+        """values_by_element[eid] has shape (n_recovery, k); returns node-averaged (n_nodes, k) and counts."""
         node_ids = self.mesh.node_ids
         index = {n: i for i, n in enumerate(node_ids)}
+        if not values_by_element:
+            return np.zeros((len(node_ids), 8)), np.zeros(len(node_ids))
         width = next(iter(values_by_element.values())).shape[1]
         total = np.zeros((len(node_ids), width))
         count = np.zeros(len(node_ids))
-        for element in self.mesh.elements:
-            pts = [(xi, eta) for xi, eta, _ in element.gauss_points()]
-            corner_values = extrapolation_matrix(pts) @ values_by_element[element.element_id]
+        for element in self.mesh.shell_elements:
+            corner_values = element.extrapolation_matrix() @ values_by_element[element.element_id]
             for local, nid in enumerate(element.node_ids):
                 total[index[nid]] += corner_values[local]
                 count[index[nid]] += 1
@@ -295,13 +344,13 @@ class ResultsExtractor:
         gp = self.gauss_points()
         by_element = {
             eid: np.hstack([gp.N[gp.element_ids == eid], gp.M[gp.element_ids == eid], gp.Q[gp.element_ids == eid]])
-            for eid in self.mesh.element_ids
+            for eid in self._shell_ids()
         }
         averaged, count = self._average_to_nodes(by_element)
         sol = self.solution
         return NodalField(
             np.array(self.mesh.node_ids), self.mesh.coordinates_array(),
-            sol.displacement_array(), sol.reactions.reshape(-1, 6).copy(),
+            sol.displacement_array(), sol.reaction_array(),
             averaged[:, :3], averaged[:, 3:6], averaged[:, 6:8], count.astype(int),
         )
 
@@ -317,14 +366,14 @@ class ResultsExtractor:
         planar = pp.stress_material if frame == "material" else pp.stress_global
         shear = pp.shear_material if frame == "material" else pp.shear_global
         values = np.hstack([planar, shear])
-        by_element = {eid: values[pp.element_ids == eid] for eid in self.mesh.element_ids}
+        by_element = {eid: values[pp.element_ids == eid] for eid in self._shell_ids()}
         averaged, _ = self._average_to_nodes(by_element)
         return np.array(self.mesh.node_ids), averaged
 
     # --------------------------------------------------------- global level
     def _resultant(self, vector: np.ndarray) -> np.ndarray:
         xyz = self.mesh.coordinates_array()
-        v = vector.reshape(-1, 6)
+        v = self.mesh.standard_array(vector)
         force = v[:, :3].sum(axis=0)
         moment = (np.cross(xyz, v[:, :3]) + v[:, 3:]).sum(axis=0)
         return np.concatenate([force, moment])
@@ -335,12 +384,13 @@ class ResultsExtractor:
             "membrane": float(el.energy_membrane.sum()),
             "bending": float(el.energy_bending.sum()),
             "coupling": float(el.energy_coupling.sum()),
+            "enrichment": float(el.energy_enrichment.sum()),
             "shear": float(el.energy_shear.sum()),
             "drilling": float(el.energy_drilling.sum()),
         }
         applied = self._resultant(self.solution.load_vector)
         reaction = self._resultant(self.solution.reactions)
-        forces = self.solution.load_vector.reshape(-1, 6)[:, :3]
+        forces = self.solution.load_array()[:, :3]
         scale = max(np.abs(forces).sum(), np.linalg.norm(reaction[:3]), 1e-300)
         length = max(np.ptp(self.mesh.coordinates_array(), axis=0).max(), 1e-300)
         imbalance = applied + reaction
@@ -352,12 +402,21 @@ class ResultsExtractor:
             i = int(np.argmax(np.abs(disp[:, d])))
             peaks[name] = (float(disp[i, d]), node_ids[i])
         max_failure = None
+        candidates = []
         if self.criterion is not None:
-            pp = self.ply_points()
-            i = int(np.argmax(pp.failure_index))
-            max_failure = (float(pp.failure_index[i]), int(pp.element_ids[i]), int(pp.ply_index[i]), str(pp.failure_mode[i]))
+            for field_ in (self.ply_points(), self.solid_points()):
+                if field_.failure_index.size:
+                    i = int(np.argmax(field_.failure_index))
+                    candidates.append((float(field_.failure_index[i]), int(field_.element_ids[i]),
+                                       int(field_.ply_index[i]), str(field_.failure_mode[i])))
+        if candidates:
+            max_failure = max(candidates, key=lambda c: c[0])
+        solid_energy = sum(e.strain_energy(self.solution.element_displacements(e.element_id))
+                           for e in self.mesh.solid_elements)
+        if self.mesh.has_solids:
+            split["solid"] = float(solid_energy)
         return GlobalTotals(
-            strain_energy=float(el.energy_total.sum()),
+            strain_energy=float(el.energy_total.sum()) + float(solid_energy),
             energy_split=split,
             external_work=self.solution.external_work,
             applied_resultant=applied,
@@ -393,6 +452,9 @@ class ResultsExtractor:
         out = {}
         for level, obj in (("gauss_points", self.gauss_points()), ("elements", self.elements()), ("nodes", self.nodes())):
             out[level] = self._write_table(directory / f"{level}.csv", {f.name: getattr(obj, f.name) for f in fields(obj)})
+        if self.mesh.has_solids:
+            sp = self.solid_points()
+            out["solid_points"] = self._write_table(directory / "solid_points.csv", {f.name: getattr(sp, f.name) for f in fields(sp)})
         if include_plies:
             pp = self.ply_points()
             out["ply_points"] = self._write_table(directory / "ply_points.csv", {f.name: getattr(pp, f.name) for f in fields(pp)})

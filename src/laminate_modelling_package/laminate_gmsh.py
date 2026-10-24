@@ -1,4 +1,4 @@
-"""Gmsh meshing: import Gmsh quad meshes into ``FEAMesh`` and build common plate geometries.
+"""Gmsh meshing: import Gmsh meshes into ``FEAMesh`` and build plate geometries.
 
 Gmsh (https://gmsh.info) is an optional dependency, installed with
 ``pip install laminate_modelling_package[gmsh]``. It is imported only when one of
@@ -11,9 +11,13 @@ Physical groups carry the model data:
 * a physical group of any dimension becomes a **node set** with the same name,
   so supports and loads can be applied by name (for example ``"left"``).
 
-Only 4-node quadrilaterals are used by the shell element, so a mesh must be
-recombined into quads (``Mesh.RecombineAll = 1``). ``GmshPlateBuilder`` does
-this for you.
+Supported surface elements are 3-node triangles (Tri3), 6-node triangles (Tri6,
+curved), 4-node quads (Quad4) and 8-node serendipity quads (Quad8, ``Mesh.ElementOrder
+= 2`` with ``Mesh.SecondOrderIncomplete = 1``), in any mix. 8-node quads become flat
+Quad8 elements with ``curved=False``, or curved Quad8 shells (the default). Gmsh puts second-order
+nodes on the CAD geometry, so the curved elements follow curved surfaces. The
+builders take ``element="quad8_curved"`` (the default) ``| "quad4" | "tri3" | "quad8" |
+"tri6" | "quad_dominant"`` and set the Gmsh options.
 """
 
 from __future__ import annotations
@@ -24,13 +28,32 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Uni
 
 import numpy as np
 
-from .laminate_fea_engine import KinematicModel
+from .laminate_kinematics import KinematicModel
 from .laminate_mechanics import Laminate
 from .laminate_solver_pipeline import FEAMesh
 
-GMSH_TRIANGLE, GMSH_QUAD4 = 2, 3
+GMSH_TRIANGLE, GMSH_QUAD4, GMSH_TRI6, GMSH_QUAD8 = 2, 3, 9, 16
+_SUPPORTED = {GMSH_TRIANGLE: 3, GMSH_QUAD4: 4, GMSH_TRI6: 6, GMSH_QUAD8: 8}
 _SURFACE_ELEMENT_TYPES = {2: "3-node triangle", 3: "4-node quadrangle", 9: "6-node triangle", 10: "9-node quadrangle",
                           16: "8-node quadrangle"}
+
+# Gmsh options per element choice
+MESH_OPTIONS = {
+    "quad4": {"Mesh.RecombineAll": 1, "Mesh.Algorithm": 8, "Mesh.SubdivisionAlgorithm": 1, "Mesh.ElementOrder": 1},
+    "quad_dominant": {"Mesh.RecombineAll": 1, "Mesh.Algorithm": 8, "Mesh.SubdivisionAlgorithm": 0, "Mesh.ElementOrder": 1},
+    "tri3": {"Mesh.RecombineAll": 0, "Mesh.Algorithm": 6, "Mesh.ElementOrder": 1},
+    "quad8": {"Mesh.RecombineAll": 1, "Mesh.Algorithm": 8, "Mesh.SubdivisionAlgorithm": 1, "Mesh.ElementOrder": 2,
+              "Mesh.SecondOrderIncomplete": 1},
+    "tri6": {"Mesh.RecombineAll": 0, "Mesh.Algorithm": 6, "Mesh.ElementOrder": 2},
+}
+MESH_OPTIONS["quad8_curved"] = dict(MESH_OPTIONS["quad8"])
+
+
+def mesh_options(element: str) -> Dict[str, float]:
+    try:
+        return dict(MESH_OPTIONS[element])
+    except KeyError as exc:
+        raise ValueError(f"element must be one of {', '.join(MESH_OPTIONS)}") from exc
 
 
 class GmshUnavailableError(ImportError):
@@ -111,6 +134,8 @@ class GmshMeshImporter:
         Elements whose normal points against this vector have their node order
         reversed, so pressure and the ply stack face a consistent side. Use
         ``None`` to keep Gmsh's orientation (for example on closed 3D surfaces).
+    curved:
+        Build 8-node quads as curved Quad8 shells (the default) instead of flat Quad8.
     """
 
     def __init__(
@@ -119,8 +144,10 @@ class GmshMeshImporter:
         kinematics: KinematicModel,
         default_laminate: Optional[Laminate] = None,
         reference_normal: Optional[Sequence[float]] = (0.0, 0.0, 1.0),
+        curved: bool = True,
         **element_options,
     ):
+        self.curved = bool(curved)
         if isinstance(laminates, Laminate):
             self.laminates: Dict[str, Laminate] = {}
             self.default_laminate = laminates
@@ -132,8 +159,17 @@ class GmshMeshImporter:
         self.element_options = element_options
 
     # ----------------------------------------------------------------- entry points
-    def from_file(self, path: Union[str, Path], mesh_options: Optional[Mapping[str, float]] = None) -> GmshMesh:
-        """Read a ``.msh`` file, or open a geometry file (``.geo``, ``.step``, ...) and mesh it in quads."""
+    def from_file(
+        self, path: Union[str, Path], mesh_options: Optional[Mapping[str, float]] = None,
+        element: Optional[str] = None,
+    ) -> GmshMesh:
+        """Read a ``.msh`` file, or open a geometry file (``.geo``, ``.step``, ...) and mesh it.
+
+        ``element`` picks the element family for geometry files (curved Quad8 by
+        default); ``mesh_options`` overrides or adds Gmsh options. A ``.msh`` file keeps
+        its own elements, and its 8-node quads follow the importer's ``curved`` unless
+        ``element`` says otherwise.
+        """
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(path)
@@ -141,15 +177,20 @@ class GmshMeshImporter:
             gmsh.clear()
             gmsh.open(str(path))
             if path.suffix.lower() != ".msh":
-                options = {"Mesh.RecombineAll": 1, "Mesh.Algorithm": 8, "Mesh.SubdivisionAlgorithm": 1}
+                element = element or "quad8_curved"
+                options = globals()["mesh_options"](element)
                 options.update(mesh_options or {})
                 for name, value in options.items():
                     gmsh.option.setNumber(name, value)
                 gmsh.model.mesh.generate(2)
-            return self.from_model()
+            return self.from_model(curved={"quad8_curved": True, "quad8": False}.get(element))
 
-    def from_model(self) -> GmshMesh:
-        """Convert the mesh of the current Gmsh model (already generated) into an ``FEAMesh``."""
+    def from_model(self, curved: Optional[bool] = None) -> GmshMesh:
+        """Convert the mesh of the current Gmsh model (already generated) into an ``FEAMesh``.
+
+        ``curved`` overrides the importer's choice of flat or curved Quad8.
+        """
+        curved = self.curved if curved is None else bool(curved)
         gmsh = _gmsh()
         if not gmsh.isInitialized():
             raise RuntimeError("Gmsh is not initialised; build or open a model first")
@@ -167,16 +208,19 @@ class GmshMeshImporter:
         for _, surface in gmsh.model.getEntities(2):
             types, _, connectivity = gmsh.model.mesh.getElements(2, surface)
             for etype, conn in zip(types, connectivity):
-                if etype != GMSH_QUAD4:
+                if etype not in _SUPPORTED:
                     raise UnsupportedMeshError(
                         f"Surface {surface} has {_SURFACE_ELEMENT_TYPES.get(etype, f'type-{etype}')} elements. "
-                        "The shell element needs 4-node quads: set Mesh.RecombineAll = 1 (and Mesh.ElementOrder = 1)"
+                        "Supported are 3- and 6-node triangles, 4-node quads and 8-node quads; for quadratic quads set "
+                        "Mesh.SecondOrderIncomplete = 1 with Mesh.RecombineAll = 1"
                     )
                 names = surface_names.get(surface, [])
                 laminate = self._laminate_for(surface, names)
-                for quad in np.asarray(conn, dtype=int).reshape(-1, 4):
-                    nodes = self._oriented(mesh, [int(n) for n in quad])
-                    mesh.add_element(element_id, nodes, laminate, self.kinematics, **self.element_options)
+                for cell in np.asarray(conn, dtype=int).reshape(-1, _SUPPORTED[etype]):
+                    nodes = self._oriented(mesh, [int(n) for n in cell])
+                    element_type = "quad8_curved" if curved and etype == GMSH_QUAD8 else None
+                    mesh.add_element(element_id, nodes, laminate, self.kinematics, element_type=element_type,
+                                     **self.element_options)
                     for name in names:
                         element_sets.setdefault(name, []).append(element_id)
                     element_id += 1
@@ -213,10 +257,20 @@ class GmshMeshImporter:
         if self.reference_normal is None:
             return nodes
         x = np.array([mesh.node_coordinates(n) for n in nodes])
-        normal = np.cross(x[2] - x[0], x[3] - x[1])
-        if np.dot(normal, self.reference_normal) < 0.0:
+        if len(nodes) in (3, 6):
+            normal = np.cross(x[1] - x[0], x[2] - x[0])
+        else:
+            normal = np.cross(x[2] - x[0], x[3] - x[1])
+        if np.dot(normal, self.reference_normal) >= 0.0:
+            return nodes
+        if len(nodes) == 3:
+            return [nodes[0], nodes[2], nodes[1]]
+        if len(nodes) == 4:
             return [nodes[0], nodes[3], nodes[2], nodes[1]]
-        return nodes
+        if len(nodes) == 6:  # Tri6: mid-side nodes follow their edges
+            return [nodes[0], nodes[2], nodes[1], nodes[5], nodes[4], nodes[3]]
+        # Quad8: reverse the corners and carry the mid-side nodes with their edges
+        return [nodes[0], nodes[3], nodes[2], nodes[1], nodes[7], nodes[6], nodes[5], nodes[4]]
 
     @staticmethod
     def _drop_orphan_nodes(mesh: FEAMesh) -> None:
@@ -247,13 +301,14 @@ class CircularHole:
 
 
 class GmshPlateBuilder:
-    """Meshes a flat rectangular plate with optional circular holes into Quad4 elements.
+    """Meshes a flat rectangular plate with optional circular holes.
 
     Named node sets on the result: ``left`` (x = 0), ``right`` (x = length),
     ``bottom`` (y = 0), ``top`` (y = width), ``hole_1``, ``hole_2``, ... and
     ``plate`` (the whole surface, also the element set name). The element size
     shrinks to ``hole_size`` on the hole edges and grows to ``size`` over
-    ``transition`` hole radii.
+    ``transition`` hole radii. ``element`` chooses curved Quad8 (default), Quad4, Tri3, flat Quad8, Tri6
+    or a quad-dominant Quad4/Tri3 mix.
     """
 
     def __init__(
@@ -264,7 +319,10 @@ class GmshPlateBuilder:
         size: Optional[float] = None,
         hole_size: Optional[float] = None,
         transition: float = 3.0,
+        element: str = "quad8_curved",
     ):
+        self.element = element
+        mesh_options(element)  # validates the choice
         if length <= 0 or width <= 0:
             raise ValueError("Plate length and width must be positive")
         self.length, self.width = float(length), float(width)
@@ -283,13 +341,12 @@ class GmshPlateBuilder:
             gmsh.model.add("plate")
             self._geometry(gmsh)
             self._sizing(gmsh)
-            for name, value in {"Mesh.RecombineAll": 1, "Mesh.Algorithm": 8, "Mesh.SubdivisionAlgorithm": 1,
-                                "Mesh.ElementOrder": 1}.items():
+            for name, value in mesh_options(self.element).items():
                 gmsh.option.setNumber(name, value)
             gmsh.model.mesh.generate(2)
             if save_msh is not None:
                 gmsh.write(str(save_msh))
-            return importer.from_model()
+            return importer.from_model(curved={"quad8_curved": True, "quad8": False}.get(self.element))
 
     def _geometry(self, gmsh) -> None:
         occ = gmsh.model.occ
