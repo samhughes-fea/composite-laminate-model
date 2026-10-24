@@ -8,6 +8,10 @@ general laminate mechanics from thin plates to thick laminates:
 - a blade section builder: airfoils, chordwise skin regions, spar caps and shear webs,
   twist, taper and pitch axis, and beam section properties (4 × 4 stiffness, shear,
   tension and mass centres) extracted from the shell model
+- torsion beyond Saint-Venant: thin-walled section properties (multi-cell shear flows,
+  warping function, shear centre, EΓ), restrained-warping beams with the bimoment
+  (Vlasov, Benscoter), and Generalised Beam Theory with the section's distortional modes
+  and ribs
 - ply books: laminates defined ply by ply over element sets, with ply drops and
   per-ply results
 - 3D orthotropic materials, plies and laminates, with temperature-dependent properties
@@ -45,6 +49,9 @@ general laminate mechanics from thin plates to thick laminates:
 │       ├── laminate_curved_shell.py        curved Quad8 / Tri6 shells (normals from the surface)
 │       ├── laminate_solid.py               layered Hex8 / Hex20 solids, solid_block, shell-solid coupling
 │       ├── laminate_blade.py               Airfoil, Station, BladeBuilder, beam_section_properties
+│       ├── laminate_thin_wall.py           ThinWalledSection: Saint-Venant shear flows, GJ, warping function, EΓ
+│       ├── laminate_torsion.py             RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
+│       ├── laminate_gbt.py                 GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
 │       ├── laminate_connectors.py          reference nodes, rigid_link (RBE2), distributing_link (RBE3)
 │       ├── laminate_layup.py               PlyDefinition, Layup: ply books, ply drops, per-ply results
 │       ├── laminate_orientation.py         FixedDirection, CylindricalDirection, FieldDirection
@@ -63,7 +70,7 @@ general laminate mechanics from thin plates to thick laminates:
 │       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
 │       ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
 │       └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
-├── examples/                               twenty-six worked examples with figures (see examples/README.md)
+├── examples/                               twenty-eight worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -160,6 +167,55 @@ props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_cou
 section loads from an aeroelastic code into the model, and measure section motion.
 See examples [20](examples/20_blade_beam_properties/),
 [21](examples/21_spar_cap_ply_drops/) and [23](examples/23_blade_segment/).
+
+## Torsion: Saint-Venant, restrained warping and distortion
+
+`beam_section_properties` gives the Saint-Venant GJ of a segment. Three further
+tools follow the torsional response beyond it, each adding one physical
+contribution:
+
+```python
+from laminate_modelling_package import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
+
+section = ThinWalledSection.from_blade_mesh(blade, z=5.0)       # or from_segments(...)
+section.GJ, section.shear_flow, section.omega, section.shear_centre, section.EGamma
+
+beam = RestrainedTorsionBeam.from_section(section, length=10.0)    # Benscoter; vlasov=True for Vlasov
+r = beam.cantilever_tip_torque(1e3)      # twist, warping amplitude, bimoment, Saint-Venant / warping torque
+r = beam.solve(distributed_torque=50.0, supports={0.0: (True, True)})
+
+gbt = GeneralizedBeam(section, 10.0, warping="full", distortional_modes=8,
+                      z_nodes=GeneralizedBeam.graded_nodes(10.0, 40, stations=[5.0]))
+gbt.clamp(0.0).diaphragm(5.0).add_wall_load(10.0, gbt.walls_named("te_panel"), (0.0, -2e3))
+sol = gbt.solve()
+sol.mean_twist(z), sol.bimoment(z), sol.distortion(z, 0), sol.wall_resultants(z)
+```
+
+- **Saint-Venant** (`ThinWalledSection`). The section is a network of laminate walls.
+  The warping function is the one that minimises the membrane shear energy, which
+  gives the Bredt-Batho shear flows in any number of cells and the sectorial
+  coordinate on open branches in one solve. GJ adds each wall's plate twisting. The
+  shear centre is the pole that makes ω orthogonal to bending, and EΓ = ∫ Et ω² ds
+  plus the walls' own bending.
+- **Restrained warping** (`RestrainedTorsionBeam`). Benscoter's theory gives the
+  warping its own amplitude φ(z), with shear stiffness S = Ip − J; Vlasov's ties it to
+  the twist rate (S → ∞). Solved in closed form for cantilevers and by finite elements
+  for any supports. Outputs: bimoment B = −EΓ φ', warping stress N_zz = B Et ω / EΓ,
+  and the split of the torque into Saint-Venant and warping parts.
+- **Distortion** (`GeneralizedBeam`, Generalised Beam Theory). Every section point
+  gets an axial warping displacement and an in-plane displacement and rotation. The
+  walls are Kirchhoff plate strips with their full stiffness, couplings included. The
+  in-plane fields split into the three rigid modes and the distortional modes, which
+  are free of work with the Saint-Venant shear flows and ordered from the softest.
+  Choosing the modes gives each level: `warping="classical", distortional_modes=0` is
+  Benscoter's beam (with Timoshenko bending), `warping="full"` adds shear lag,
+  `distortional_modes=n` adds distortion, and `extensible=True` lets the walls stretch
+  round the contour. Clamps, ribs (`diaphragm`), warping restraints, Saint-Venant
+  torques, point forces and wall loads.
+
+Examples [27](examples/27_box_spar_torsion/) (box spar) and
+[28](examples/28_blade_torsion_hierarchy/) (three-cell blade section) check each layer
+against closed forms and the shell model.
 
 ## Ply books, solids and ParaView
 
@@ -290,7 +346,7 @@ optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 
 ## Examples
 
-[`examples/`](examples/) holds twenty-six worked examples, each in its own folder
+[`examples/`](examples/) holds twenty-eight worked examples, each in its own folder
 with a script, its figures and a README that walks through the model. Examples
 01–19 cover the laminate mechanics underneath: the kinematic theories,
 through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
@@ -302,7 +358,10 @@ stresses at a ply drop, and a sandwich blade segment checked against a beam. Exa
 24 and 25 validate the blade tools on the IEA 15 MW reference blade: section
 properties against PreComp and the published data, and a 20 m segment against
 CalculiX. Example 26 compares skins meshed on the mould line with offset laminates
-and on their mid-surface. Run them all with `python examples/run_all.py`.
+and on their mid-surface. Examples 27 and 28 take torsion beyond Saint-Venant on a
+box spar and a three-cell blade section: restrained warping and the bimoment, then
+GBT distortion and ribs, each checked against closed forms and the shell model. Run
+them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
@@ -375,6 +434,11 @@ The test suite includes:
 - Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
 - Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
+- Thin-walled section properties against textbook closed forms: an isotropic box
+  (Bredt GJ, Benscoter warping function, EΓ, Ip), an I-beam (open GJ and Γ) and a channel
+  (shear centre and Γ), all exact. Benscoter and Vlasov finite elements against their
+  closed forms, and GBT against shell models of clamped boxes under a tip torque and a
+  web force couple, within 2% (examples 27 and 28 give the full comparison).
 - The IEA 15 MW reference blade ([example 24](examples/24_iea15mw_section_properties/)): from its published layup, EA, EI, mass and the tension centre agree with PreComp on the same sections within 0.3% at six stations; the shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within about 1% in deflection, 2% in twist and 6% in spar-cap fibre stress.
 
 ## Limitations
@@ -385,6 +449,7 @@ The test suite includes:
 - Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there, or mesh the skins on their mid-surface with `mesh_surface="mid"`, which brings every element to within 0.4% (examples 24 and 26).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
-- `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time.
+- `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time. Its GJ includes the cross-section distortion that the clamped root and rigid tip drive over the segment, so it reads a few percent below the Saint-Venant GJ of `ThinWalledSection` on short segments (example 28).
+- `ThinWalledSection`, `RestrainedTorsionBeam` and `GeneralizedBeam` describe prismatic beams with straight walls between section points; the closed-form section properties use the uncoupled wall stiffnesses (GBT keeps all couplings).
 - Equilibrium recovery assumes the hygrothermal state is constant within each element, and is least accurate right at supports and free edges, where it falls back on the element shear force.
 - Tri3 is markedly stiffer than Quad4 for the same mesh; use it to fill regions that cannot take quads.

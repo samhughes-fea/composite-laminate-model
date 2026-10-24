@@ -19,6 +19,10 @@ Meshing         BladeBuilder (airfoil skins, spar caps, shear webs; Airfoil, Sta
                 GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
 Connections     add_reference_node, rigid_link (RBE2), distributing_link (RBE3)
 Beam properties beam_section_properties (EA, EI, GJ, couplings, shear/tension centres)
+Torsion         ThinWalledSection (Saint-Venant shear flows and GJ, warping function,
+                shear centre, EΓ), RestrainedTorsionBeam (Benscoter / Vlasov: bimoment,
+                warping torque), GeneralizedBeam and SectionModes (GBT: warping and
+                cross-section distortion, ribs)
 Results         ResultsExtractor (Gauss point, element, node, ply, solid and global levels);
                 write_vtu, write_pvd, VTKExporter (ParaView output, per-ply cells)
 Post-processing ExactStressRecoverer, EquilibriumStressRecoverer (sigma_z and interlaminar
@@ -190,6 +194,9 @@ from .laminate_blade import (
     beam_section_properties,
 )
 from .laminate_connectors import add_reference_node, distributing_link, rigid_link
+from .laminate_thin_wall import ThinWalledSection, Wall, condensed_wall_stiffness
+from .laminate_torsion import RestrainedTorsionBeam, TorsionResponse
+from .laminate_gbt import GBTSolution, GeneralizedBeam, SectionModes
 
 __version__ = "1.0.0"
 
