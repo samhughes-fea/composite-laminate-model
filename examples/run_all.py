@@ -14,7 +14,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def main() -> int:
-    scripts = sorted(p for p in HERE.glob("0*/*.py"))
+    scripts = sorted(p for p in HERE.glob("[0-9][0-9]_*/*.py"))
     failures = []
     for script in scripts:
         print(f"\n=== {script.parent.name} ===")

@@ -11,3 +11,4 @@ benchmark_runs/
 *.sta
 spooles.out
 examples/**/calculix_run/
+examples/**/vtk/

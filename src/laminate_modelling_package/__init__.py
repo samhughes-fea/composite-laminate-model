@@ -2,17 +2,31 @@
 
 Public API overview
 -------------------
-Materials       ElasticProperties3D, StrengthProperties3D, MaterialCard, MaterialLibrary
+Materials       ElasticProperties3D, StrengthProperties3D, MaterialCard, MaterialLibrary,
+                TemperatureDependentMaterial
 Geometry        Ply, Laminate
 Environment     HygrothermalProperties, HygrothermalState, HygrothermalEngine
-Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel
-Element         CompositePlateElement (Quad4, 24 DOF)
-Solution        FEAMesh, BoundaryConditions, LoadCase, StructuralGlobalSolver
-Results         ResultsExtractor (Gauss point, element, node, ply and global levels)
-Post-processing ExactStressRecoverer, failure criteria, SmearedCrackDegradation,
-                ProgressiveDamageAnalysis
+Kinematics      CLPTModel, FSDTModel, RefinedZigZagModel, LayerwiseModel (full or condensed)
+Elements        ShellElement: Quad4ShellElement (alias CompositePlateElement), Tri3ShellElement,
+                Quad8ShellElement, CurvedQuad8ShellElement, Tri6ShellElement; ElementRegistry;
+                layered solids LayeredHex8Element, LayeredHex20Element (solid_block,
+                couple_shell_to_solid)
+Lay-up          Layup, PlyDefinition, PlyDrop, ReferenceDirection, AngleField, TabulatedDrape
+Orientation     FixedDirection, CylindricalDirection, FieldDirection
+Solution        FEAMesh, BoundaryConditions, LoadCase, LoadCombination, StructuralGlobalSolver
+Meshing         BladeBuilder (airfoil skins, spar caps, shear webs; Airfoil, Station,
+                SkinRegion, ShearWeb), RectangularPlateBuilder, CylindricalPanelBuilder,
+                GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
+Connections     add_reference_node, rigid_link (RBE2), distributing_link (RBE3)
+Beam properties beam_section_properties (EA, EI, GJ, couplings, shear/tension centres)
+Results         ResultsExtractor (Gauss point, element, node, ply, solid and global levels);
+                write_vtu, write_pvd, VTKExporter (ParaView output, per-ply cells)
+Post-processing ExactStressRecoverer, EquilibriumStressRecoverer (sigma_z and interlaminar
+                shear from 3D equilibrium), failure criteria (register_criterion,
+                DelaminationOnsetCriterion), SmearedCrackDegradation, ProgressiveDamageAnalysis
 Kernels         NativePythonKernelAdapter, CalculiXKernelAdapter, NastranKernelAdapter
-Verification    StressDistributionVerifier
+Verification    StressDistributionVerifier, PaganoPlate (exact 3D cross-ply solution),
+                ModelChecker (pre-solve checks)
 """
 
 from .laminate_benchmark_stress import DistributionErrorStatistics, StressDistributionVerifier, ThicknessProfile
@@ -20,26 +34,56 @@ from .laminate_failure_criteria import (
     FailureCriterion,
     FailureMode,
     FailureResult,
+    DelaminationOnsetCriterion,
     HashinCriterion,
     MaximumStressCriterion,
     TsaiHillCriterion,
     TsaiWuCriterion,
+    available_criteria,
     create_criterion,
+    register_criterion,
 )
-from .laminate_fea_engine import (
-    CLPTModel,
+from .laminate_elasticity_3d import PaganoPlate, PaganoProfile
+from .laminate_equilibrium import EquilibriumStressRecoverer, InterfaceCheck
+from .laminate_model_check import ModelChecker, ModelIssue, ModelReport
+from .laminate_temperature import TemperatureDependentMaterial, apply_operating_temperature, laminate_at_temperature
+from .laminate_elements import (
+    DEFAULT_ELEMENTS,
     CompositePlateElement,
+    ElementRegistry,
+    Quad4ShellElement,
+    Quad8ShellElement,
+    ShellElement,
+    Tri3ShellElement,
+    shape_functions,
+)
+from .laminate_kinematics import (
+    CLPTModel,
     FSDTModel,
+    GeneralizedSection,
     KinematicModel,
     LayerwiseModel,
     LayerwiseThicknessMatrices,
     RefinedZigZagModel,
+    SectionModel,
     SectionStiffness,
+    ThroughThicknessBasis,
+    ThroughThicknessRecovery,
     integrate_abd,
-    shape_functions,
+)
+from .laminate_mesh_builders import CylindricalPanelBuilder, NamedMesh, RectangularPlateBuilder
+from .laminate_orientation import CylindricalDirection, FieldDirection, FixedDirection
+from .laminate_gmsh import (
+    CircularHole,
+    GmshMesh,
+    GmshMeshImporter,
+    GmshPlateBuilder,
+    GmshSession,
+    GmshUnavailableError,
+    UnsupportedMeshError,
 )
 from .laminate_hygrothermal import HygrothermalEngine, HygrothermalProperties, HygrothermalState
-from .laminate_kernels import (
+from .kernels import (
     AnalysisModel,
     CalculiXDeckWriter,
     CalculiXKernelAdapter,
@@ -92,7 +136,12 @@ from .laminate_progressive_damage import (
 )
 from .laminate_solver_pipeline import (
     DOF,
+    BodyLoad,
     BoundaryConditions,
+    EnrichedDOF,
+    LineLoad,
+    LoadCombination,
+    combine_solutions,
     ConstraintEliminator,
     DenseLinearSolver,
     FEAMesh,
@@ -112,9 +161,35 @@ from .laminate_results import (
     NodalField,
     PlyPointField,
     ResultsExtractor,
+    SolidPointField,
     extrapolation_matrix,
 )
-from .laminate_stress_recovery import ExactStressRecoverer, PointStressState
+from .laminate_stress_recovery import ExactStressRecoverer, PointStressState, StressRecoverer
+from .laminate_curved_shell import CurvedQuad8ShellElement, CurvedShellElement, Tri6ShellElement
+from .laminate_layup import AngleField, Layup, PlyDefinition, PlyDrop, ReferenceDirection, TabulatedDrape
+from .laminate_solid import (
+    DEFAULT_SOLIDS,
+    LayeredHex8Element,
+    LayeredHex20Element,
+    LayeredSolidElement,
+    SolidPoint,
+    SolidRegistry,
+    couple_shell_to_solid,
+    merge_coincident_nodes,
+    solid_block,
+)
+from .laminate_vtk import VTKExporter, write_pvd, write_vtu
+from .laminate_blade import (
+    Airfoil,
+    BeamSectionProperties,
+    BladeBuilder,
+    BladeMesh,
+    ShearWeb,
+    SkinRegion,
+    Station,
+    beam_section_properties,
+)
+from .laminate_connectors import add_reference_node, distributing_link, rigid_link
 
 __version__ = "1.0.0"
 

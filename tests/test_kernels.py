@@ -170,7 +170,8 @@ def test_calculix_deck_promotes_to_s8r(model, tmp_path):
     n, e = 6, 6
     assert len(deck.midside_nodes) == n * (e + 1) * 2
     assert "*ELEMENT, TYPE=S8R, ELSET=EALL" in text
-    assert "*SHELL SECTION, ELSET=LAM1, COMPOSITE, OFFSET=0." in text
+    assert "*SHELL SECTION, ELSET=SEC1, COMPOSITE, OFFSET=0" in text
+    assert "1, 0, 0, 0, 1, 0" in text  # flat mesh: material axes are global x, y
     assert text.count("*ORIENTATION") == 4
     assert "*EXPANSION, TYPE=ORTHO, ZERO=0." in text and "*TEMPERATURE" in text
     # Mid-side nodes between two simply supported edge nodes are supported too.
@@ -178,6 +179,37 @@ def test_calculix_deck_promotes_to_s8r(model, tmp_path):
     m = deck.midside_nodes[(corner_a, corner_b)]
     assert f"\n{m}, 3, 3, 0" in text
     assert len(deck.layer_heights[15]) == 8
+
+
+def _clamped_blade_with_gravity(cfrp):
+    from laminate_modelling_package import Airfoil, BladeBuilder, BoundaryConditions, SkinRegion, Station
+
+    af = Airfoil.naca4("0018")
+    skin = Laminate.from_angles(cfrp, [45, -45, 0, 0, -45, 45], 1.0e-3)
+    blade = BladeBuilder([Station(0.0, 1.0, af), Station(4.0, 0.8, af, twist=-4.0)],
+                         [SkinRegion("le", 0.0, 0.3, 4), SkinRegion("te", 0.3, 1.0, 6)], n_span=8).build(skin, FSDTModel())
+    bcs = BoundaryConditions().clamp(blade.nodes("root"))
+    loads = LoadCase().add_body_load((0.0, -9.81 * 50, 0.0))  # 50 g, so the deflection is not tiny
+    tip = blade.nodes("tip")[0]
+    return blade, AnalysisModel(blade.mesh, bcs, loads, "clamped_blade"), tip
+
+
+def test_calculix_deck_writes_gravity_as_a_body_load(cfrp, tmp_path):
+    blade, model, _ = _clamped_blade_with_gravity(cfrp)
+    text = CalculiXDeckWriter().write(model, tmp_path, "job").path.read_text()
+    assert "EALL, GRAV, 490.5, 0, -1, 0" in text
+    assert "*CLOAD" not in text  # gravity is not turned into nodal forces and moments
+    root = blade.nodes("root")[0]
+    assert f"\n{root}, 1, 1, 0" in text and f"\n{root}, 4, 4, 0" in text  # rotations stay fixed, or ccx hinges the edge
+
+
+@pytest.mark.skipif(shutil.which("ccx") is None, reason="CalculiX (ccx) is not installed")
+def test_calculix_runs_a_clamped_offset_blade_under_gravity(cfrp, tmp_path):
+    blade, model, tip = _clamped_blade_with_gravity(cfrp)
+    native = NativePythonKernelAdapter().run(model)
+    ccx = CalculiXKernelAdapter(work_dir=tmp_path).run(model)
+    assert ccx.ok, ccx.message
+    assert ccx.displacements[tip][1] == pytest.approx(native.displacements[tip][1], rel=0.05)
 
 
 def test_calculix_rejects_gradient_states(model, tmp_path):

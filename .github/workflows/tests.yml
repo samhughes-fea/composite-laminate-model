@@ -17,8 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install CalculiX
-        run: sudo apt-get update && sudo apt-get install -y calculix-ccx
+      - name: Install CalculiX and the Gmsh runtime
+        run: sudo apt-get update && sudo apt-get install -y calculix-ccx libglu1-mesa
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Run tests

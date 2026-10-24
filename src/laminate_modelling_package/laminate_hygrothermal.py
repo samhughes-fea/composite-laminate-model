@@ -94,6 +94,14 @@ class HygrothermalState:
     def moisture_at(self, z: float) -> float:
         return self.delta_moisture + self.moisture_gradient * z
 
+    def __add__(self, other: "HygrothermalState") -> "HygrothermalState":
+        return HygrothermalState(
+            self.delta_temperature + other.delta_temperature,
+            self.delta_moisture + other.delta_moisture,
+            self.temperature_gradient + other.temperature_gradient,
+            self.moisture_gradient + other.moisture_gradient,
+        )
+
     def scaled(self, factor: float) -> "HygrothermalState":
         return HygrothermalState(
             self.delta_temperature * factor,
@@ -126,16 +134,22 @@ class HygrothermalEngine:
         return props.alpha_vector() * delta_temperature + props.beta_vector() * delta_moisture
 
     def global_free_strain_3d(
-        self, ply: "Ply", state: HygrothermalState, z: float
+        self, ply: "Ply", state: HygrothermalState, z: float, mid_plane: float = 0.0
     ) -> np.ndarray:
-        """3D free strain at height z in global axes: eps_x = T_eps^-1 eps_1."""
+        """3D free strain at height z in global axes: eps_x = T_eps^-1 eps_1.
+
+        ``z`` is measured from the element reference surface and ``mid_plane`` is the
+        laminate mid-plane height on the same axis (``Laminate.offset``); the state's
+        gradients act about the mid-plane.
+        """
         props = self.properties_of(ply)
-        eps_material = self.material_free_strain(props, state.temperature_at(z), state.moisture_at(z))
+        zeta = z - mid_plane
+        eps_material = self.material_free_strain(props, state.temperature_at(zeta), state.moisture_at(zeta))
         return np.linalg.solve(strain_rotation_3d(ply.angle), eps_material)
 
-    def global_free_strain(self, ply: "Ply", state: HygrothermalState, z: float) -> np.ndarray:
+    def global_free_strain(self, ply: "Ply", state: HygrothermalState, z: float, mid_plane: float = 0.0) -> np.ndarray:
         """In-plane free strain [eps_x, eps_y, gamma_xy] at height z in global axes."""
-        return self.global_free_strain_3d(ply, state, z)[list(_PLANE_INDICES)]
+        return self.global_free_strain_3d(ply, state, z, mid_plane)[list(_PLANE_INDICES)]
 
     def global_expansion_coefficients(self, ply: "Ply") -> Tuple[np.ndarray, np.ndarray]:
         """Global in-plane (alpha_x, alpha_y, alpha_xy) and (beta_x, beta_y, beta_xy)."""
@@ -159,10 +173,12 @@ class HygrothermalEngine:
         M = np.zeros(3)
         if state.is_null:
             return N, M
+        c = getattr(laminate, "offset", 0.0)
         for ply, (z_b, z_t) in zip(laminate.plies, laminate.ply_bounds()):
             alpha, beta = self.global_expansion_coefficients(ply)
-            e0 = alpha * state.delta_temperature + beta * state.delta_moisture
             e1 = alpha * state.temperature_gradient + beta * state.moisture_gradient
+            # fields act about the mid-plane: eps(z) = e0_mid + e1 (z - c) = (e0_mid - e1 c) + e1 z
+            e0 = alpha * state.delta_temperature + beta * state.delta_moisture - e1 * c
             h1 = z_t - z_b
             h2 = 0.5 * (z_t**2 - z_b**2)
             h3 = (z_t**3 - z_b**3) / 3.0
