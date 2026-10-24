@@ -11,8 +11,13 @@ ply book reports where every ply stops, checks that no more than two plies stop 
 one edge, and gives the highest Tsai-Wu index of each named ply. The model is also
 written to ParaView (``vtk/``) with one cell per ply.
 
+The reference is a beam: at each station the section stiffness comes from
+thin-walled beam theory (``_shared/thin_wall.py``) with the cap laminate the ply
+book gives there, the bending moment from the pressure load, and the deflection
+from integrating the curvature twice from the clamped root.
+
 Left: cap thickness along the span. Middle: spanwise strain on the suction-side cap
-with the tip deflection in the title. Right: the worst Tsai-Wu index of each cap ply.
+against the beam. Right: the worst Tsai-Wu index of each cap ply.
 """
 
 import sys
@@ -22,13 +27,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
-from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
+from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
+from _shared.thin_wall import thin_wall_stiffness
 from laminate_modelling_package import (
     Airfoil,
     BladeBuilder,
     BoundaryConditions,
     FSDTModel,
     Laminate,
+    Ply,
     Layup,
     LoadCase,
     PlyDefinition,
@@ -58,6 +65,45 @@ def ply_book(glass):
         plies.append(PlyDefinition(f"cap_{k + 1:02d}", glass, t_ud, 0.0, elements="spar_cap", region=region))
     plies += [PlyDefinition(f"skin_out_{k}", glass, t_skin, a, elements="spar_cap") for k, a in enumerate((-45, 45, 0))]
     return Layup(plies, name="cap", reference="top")  # outer mould line fixed, as laid in the mould
+
+
+def section_airfoil(s):
+    """The builder's section at span fraction s: NACA 0024 blended into NACA 0018."""
+    x = 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, 161)))
+    root, tip = Airfoil.naca4("0024"), Airfoil.naca4("0018")
+    up = (1 - s) * root.surface("upper", x) + s * tip.surface("upper", x)
+    lo = (1 - s) * root.surface("lower", x) + s * tip.surface("lower", x)
+    return Airfoil(np.vstack([np.column_stack([x[::-1], up[::-1]]), np.column_stack([x[1:], lo[1:]])]))
+
+
+def beam_reference(layup, skin, web, n=81):
+    """Flap deflection and suction-cap strain of the segment as a beam.
+
+    Thin-walled section stiffness at each station (cap laminate from the ply book at
+    that station), the flap load per unit span from the pressure on the pressure side
+    (q(z) times the chord), and the curvature integrated twice from the clamped root.
+    Twist and shear deformation are left out.
+    """
+    z = np.linspace(0.0, LENGTH, n)
+    chord = 1.2 + (0.6 - 1.2) * z / LENGTH
+    load = Q_TIP * z / LENGTH * chord  # N/m, flapwise (+y)
+    shear = np.array([np.trapezoid(load[i:], z[i:]) for i in range(n)])
+    moment = -np.array([np.trapezoid(shear[i:], z[i:]) for i in range(n)])  # about +x: tension on the pressure side
+    kappa, strain = np.zeros(n), np.zeros(n)
+    for i, zi in enumerate(z):
+        af = section_airfoil(zi / LENGTH)
+        cap = Laminate([Ply(p.material, p.thickness, p.angle) for p in layup.plies
+                        if p.region is None or p.region(np.array([0.0, 0.0, zi]))])
+        lams = {"le_panel": skin, "te_panel": skin, "spar_cap": cap, "web_fwd": web, "web_aft": web}
+        C = np.linalg.inv(thin_wall_stiffness(af, chord[i], 0.35, REGIONS, WEBS, lams))
+        e0, kappa[i] = C[0, 1] * moment[i], C[1, 1] * moment[i]
+        xc = np.linspace(REGIONS[1].start, REGIONS[1].end, 21)
+        y_mid = af.surface("upper", xc) * chord[i] - 0.5 * cap.thickness  # suction cap mid-plane
+        strain[i] = np.mean(e0 + kappa[i] * y_mid)
+    slope = np.concatenate([[0.0], np.cumsum(0.5 * (kappa[1:] + kappa[:-1]) * np.diff(z))])
+    # kappa_x > 0 bends the tip towards -y; the flap load pushes it towards +y
+    w = -np.concatenate([[0.0], np.cumsum(0.5 * (slope[1:] + slope[:-1]) * np.diff(z))])
+    return z, w, strain
 
 
 def main():
@@ -117,6 +163,11 @@ def main():
     eps_s = np.array([strain[np.isclose(z, v)].mean() for v in zs])
     sections = sorted(blade.span_positions)
     defl = [np.mean([solution.node_displacement(n)[1] for n in blade.section_nodes(zz)]) for zz in sections]
+    zb, wb, eps_b = beam_reference(layup, skin, web)
+    print(f"tip flap deflection: shell {defl[-1] * 1e3:.1f} mm, thin-wall beam {wb[-1] * 1e3:.1f} mm")
+    for zz in (1.0, 2.5, 4.5, 6.5, 8.5):
+        print(f"  cap strain at z = {zz:.1f} m: shell {np.interp(zz, zs, eps_s) * 1e6:6.0f}, "
+              f"beam {np.interp(zz, zb, eps_b) * 1e6:6.0f} microstrain")
 
     fig, (ax0, ax1, ax2) = plt.subplots(1, 3, figsize=(13.5, 4.2), gridspec_kw={"width_ratios": [1.0, 1.1, 1.3]})
     ax0.step(zs, hs * 1e3, where="mid", color=SERIES[0])
@@ -126,12 +177,15 @@ def main():
     ax0.set_ylabel("cap laminate thickness [mm]")
     ax0.set_title("Two plies stop at each station", loc="left")
 
-    ax1.plot(zs, eps_s * 1e6, color=SERIES[1])
+    ax1.plot(zs, eps_s * 1e6, color=SERIES[1], label="shell model")
+    ax1.plot(zb, eps_b * 1e6, color=REFERENCE, lw=1.0, ls=(0, (4, 2)), label="thin-walled beam")
+    ax1.legend(loc="upper right", fontsize=7.5)
     for d in DROPS:
         ax1.axvline(d, color=TEXT_SECONDARY, lw=0.6, ls=(0, (2, 2)))
     ax1.set_xlabel("span z [m]")
     ax1.set_ylabel("spanwise strain at the cap mid-plane [µε]")
-    ax1.set_title(f"Strain steps up at each drop (tip {defl[-1] * 1e3:.0f} mm)", loc="left")
+    ax1.set_title(f"Strain steps up at each drop (tip {defl[-1] * 1e3:.0f} mm, beam {wb[-1] * 1e3:.0f} mm)",
+                  loc="left", fontsize=9.5)
 
     names = [p.name for p in layup.plies if p.name.startswith("cap_")]
     values = [worst[n]["index"] for n in names]

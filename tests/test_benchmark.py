@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import run_solver_benchmarks
+from laminate_modelling_package import run_solver_benchmarks
 from laminate_modelling_package import KernelStatus, StressDistributionVerifier, ThicknessProfile
 
 
