@@ -6,10 +6,13 @@ aircraft wings: sandwich and monolithic skins, spar caps and shear webs), built 
 general laminate mechanics from thin plates to thick laminates:
 
 - a blade section builder: airfoils, chordwise skin regions, spar caps and shear webs,
-  twist, taper and pitch axis, and beam section properties (4 × 4 stiffness, shear,
-  tension and mass centres) extracted from the shell model
+  twist, taper and pitch axis, and beam section properties extracted from the shell
+  model: the Timoshenko 6 × 6 stiffness with all its couplings (and the classical
+  4 × 4 inside it), the Timoshenko-Vlasov 7 × 7 with the warping DOF, and the shear,
+  tension and mass centres
 - torsion beyond Saint-Venant: thin-walled section properties (multi-cell shear flows,
-  warping function, shear centre, EΓ), restrained-warping beams with the bimoment
+  warping function, shear centre, EΓ, and the 6 × 6 and 7 × 7 stiffness from thin-wall
+  theory), restrained-warping beams with the bimoment
   (Vlasov, Benscoter), and Generalised Beam Theory with the section's distortional modes
   and ribs
 - ply books: laminates defined ply by ply over element sets, with ply drops and
@@ -138,8 +141,27 @@ blade = BladeBuilder(stations, regions, webs, n_span=40).build(
 
 bcs = BoundaryConditions().clamp(blade.nodes("root"))
 props = beam_section_properties(blade)   # of a prismatic segment
-props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_coupling
+props.stiffness_6x6, props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_coupling
+props = beam_section_properties(blade, warping=True, end_ribs=0.2)   # adds stiffness_7x7, EGamma
 ```
+
+**Section stiffness: 4 × 4, 6 × 6 and 7 × 7.** The matrices nest, and each adds a
+deformation the one before leaves out:
+
+| Matrix | Strains | Forces | Adds |
+|---|---|---|---|
+| `stiffness` (4 × 4, classical) | ε, κx, κy, κz | N, Mx, My, Mz | extension, bending, Saint-Venant torsion and their couplings |
+| `stiffness_6x6` (Timoshenko) | γx, γy, ε, κx, κy, κz | Fx, Fy, N, Mx, My, Mz | transverse shear and its couplings with twist (the shear centre) and bending |
+| `stiffness_7x7` (Timoshenko-Vlasov) | ... and κz′ | ... and the bimoment B | restrained warping: EΓ, with Benscoter's warping shear stiffness S alongside |
+
+The 6 × 6 is in the BeamDyn / windIO order, about the reference point, with
+γx = u_x′ − θy and γy = u_y′ + θx. The 4 × 4 is the 6 × 6 with the shear forces free,
+so it is what an Euler-Bernoulli code wants. `transform_beam_stiffness(K, offset,
+angle)` moves a 6 × 6 to another point or turns its axes. `ThinWalledSection` gives
+the same matrices from thin-wall theory (`timoshenko_stiffness`,
+`vlasov_stiffness`), from no shell model at all. The two share no code, and
+[example 29](examples/29_timoshenko_vlasov_stiffness/) compares them with each other
+and with the published IEA 15 MW 6 × 6.
 
 - **Geometry.** z is the span, x the chord (leading to trailing edge) and y the
   thickness, with the pitch axis at x = 0. `Airfoil.naca4(code)`, `Airfoil.ellipse(t)`
@@ -433,6 +455,7 @@ The test suite includes:
 - First-ply failure of a [0/90]s laminate in tension at the CLT-predicted load.
 - Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
 - Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
+- Timoshenko and Vlasov section stiffness (`tests/test_beam_stiffness.py`): thin-wall theory gives the thin tube's shear factor of 1/2 and the channel's textbook shear centre; on a box with no Poisson coupling the shell's 6 × 6 matches thin-wall theory term by term within 0.5%, and its fitted EΓ and warping shear stiffness within 6% and 15%.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
 - Thin-walled section properties against textbook closed forms: an isotropic box
   (Bredt GJ, Benscoter warping function, EΓ, Ip), an I-beam (open GJ and Γ) and a channel
@@ -449,7 +472,8 @@ The test suite includes:
 - Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there, or mesh the skins on their mid-surface with `mesh_surface="mid"`, which brings every element to within 0.4% (examples 24 and 26).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
-- `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time. Its GJ includes the cross-section distortion that the clamped root and rigid tip drive over the segment, so it reads a few percent below the Saint-Venant GJ of `ThinWalledSection` on short segments (example 28).
-- `ThinWalledSection`, `RestrainedTorsionBeam` and `GeneralizedBeam` describe prismatic beams with straight walls between section points; the closed-form section properties use the uncoupled wall stiffnesses (GBT keeps all couplings).
+- `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time. With no ribs (`end_ribs=0`, the default), its GJ includes the cross-section distortion that the clamped root and rigid tip drive over the segment, a few percent either way (examples 28 and 29); `end_ribs=0.2` holds the end fifths rigid in their plane and gives the Saint-Venant GJ (use it with Quad4 or curved Quad8: flat Quad8 on a faceted curved section reads stiff with ribs).
+- The Timoshenko shear stiffness depends on how the section rotation is defined, as shear warps the section. `beam_section_properties` uses the stiffness-weighted rotation (the one that does work with the bending moment). With Poisson's ratio it reads a few percent stiffer than thin-wall theory (the Poisson strain of the bending stress varies along a beam in shear, as in Cowper's shear coefficient): +7% on the glass root tube of the IEA 15 MW blade, where the published 6 × 6 sides with thin-wall theory.
+- `ThinWalledSection`, `RestrainedTorsionBeam` and `GeneralizedBeam` describe prismatic beams with straight walls between section points; the closed-form section properties (and the thin-wall 6 × 6 and 7 × 7) use the uncoupled wall stiffnesses, with each wall stretching and shearing without curving (GBT keeps all couplings). Off-axis walls' couplings (bend-twist, extension-twist, shear-bending) come only from the shell model (example 29).
 - Equilibrium recovery assumes the hygrothermal state is constant within each element, and is least accurate right at supports and free edges, where it falls back on the element shear force.
 - Tri3 is markedly stiffer than Quad4 for the same mesh; use it to fill regions that cannot take quads.

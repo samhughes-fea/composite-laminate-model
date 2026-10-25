@@ -749,7 +749,7 @@ def beam_section_properties(
     solver=None,
     warping: bool = False,
     section_weighting: str = "stiffness",
-    end_ribs: float = 0.2,
+    end_ribs: float = 0.0,
 ) -> BeamSectionProperties:
     """Extract beam properties of a blade segment by loading the shell model as a cantilever.
 
@@ -781,8 +781,10 @@ def beam_section_properties(
     or bulkheads would, so that only the short warping boundary layer remains and the
     middle of the span carries the Saint-Venant state: GJ then matches
     ``ThinWalledSection.from_blade_mesh(blade).GJ``. The ribs leave the sections free to
-    warp and the middle of the span free to distort. ``end_ribs=0`` gives the bare
-    cantilever.
+    warp and the middle of the span free to distort. ``end_ribs=0`` (the default) gives
+    the bare cantilever. On a faceted curved section, flat Quad8 elements (not Quad4 or
+    curved Quad8) deform in their plane under torsion and the ribs stiffen them (a thick
+    tube reads 5% high), so use ribs with Quad4 or curved Quad8 there.
 
     ``warping=True`` also measures the warping stiffness for ``stiffness_7x7``: one more
     run holds every mesh section rigid in its plane (free to warp, as Vlasov and
@@ -886,7 +888,7 @@ def beam_section_properties(
 
 
 def _section_weights(mesh, z: float, nodes: Sequence[int]) -> List[float]:
-    """Axial stiffness share of each section node: Et (= 1 / a11 along the beam axis)
+    """Axial stiffness share of each section node: Et (= 1 / (A^-1)_11 along the beam axis)
     times its share of the element edges on the section (Simpson weights on quadratic edges)."""
     from .laminate_kinematics import integrate_abd
 
@@ -901,7 +903,7 @@ def _section_weights(mesh, z: float, nodes: Sequence[int]) -> List[float]:
             continue
         key = id(e.laminate)
         if key not in cache:
-            a = np.linalg.inv(integrate_abd(Laminate(e.laminate.plies)))
+            a = np.linalg.inv(integrate_abd(Laminate(e.laminate.plies))[:3, :3])  # membrane, wall not bending
             frame = np.asarray(e.frame)
             c2 = frame[0, 2] ** 2  # material axis 1 along the beam axis: c2 = 1
             cache[key] = 1.0 / (c2 * a[0, 0] + (1.0 - c2) * a[1, 1])
