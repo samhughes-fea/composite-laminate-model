@@ -81,34 +81,43 @@ At θ = 0 (all about the pitch axis, except EI edge about the tension centre):
 
 | | Shell model | Thin-walled beam | PreComp |
 |---|---|---|---|
-| EA [N] | 9.798e8 | 9.798e8 | 9.792e8 |
-| EI flap [N m²] | 1.158e7 | 1.158e7 | 1.157e7 |
-| EI edge [N m²] | 2.136e7 | 2.136e7 | 2.126e7 |
-| GJ [N m²] | 1.700e6 | 1.727e6 | 1.109e6 |
-| Tension centre aft of the pitch axis | 51.0 mm | 51.0 mm | 50.9 mm |
+| EA [N] | 9.763e8 | 9.798e8 | 9.792e8 |
+| EI flap [N m²] | 1.152e7 | 1.158e7 | 1.157e7 |
+| EI edge [N m²] | 2.122e7 | 2.136e7 | 2.126e7 |
+| GJ [N m²] | 1.730e6 | 1.727e6 | 1.109e6 |
+| Tension centre aft of the pitch axis | 51.1 mm | 51.0 mm | 50.9 mm |
 
 Over the cap-angle sweep:
 
 | θ | EI flap: shell / thin wall / PreComp [N m²] | GJ: shell / thin wall / PreComp [N m²] | Flap-twist coupling: shell / thin wall / PreComp |
 |---|---|---|---|
-| 0° | 1.158e7 / 1.158e7 / 1.157e7 | 1.700e6 / 1.727e6 / 1.109e6 | 0 / 0 / 0 |
-| 10° | 8.22e6 / 8.23e6 / 1.07e7 | 1.95e6 / 1.97e6 / 1.16e6 | −0.329 / −0.327 / −0.159 |
-| 20° | 4.52e6 / 4.53e6 / 7.82e6 | 2.16e6 / 2.18e6 / 1.19e6 | −0.401 / −0.401 / −0.159 |
-| 30° | 2.74e6 / 2.74e6 / 4.49e6 | 2.17e6 / 2.20e6 / 1.20e6 | −0.365 / −0.366 / −0.149 |
+| 0° | 1.152e7 / 1.158e7 / 1.157e7 | 1.730e6 / 1.727e6 / 1.109e6 | 0 / 0 / 0 |
+| 10° | 8.21e6 / 8.23e6 / 1.07e7 | 1.98e6 / 1.97e6 / 1.16e6 | −0.332 / −0.327 / −0.159 |
+| 20° | 4.52e6 / 4.53e6 / 7.82e6 | 2.20e6 / 2.18e6 / 1.19e6 | −0.405 / −0.401 / −0.159 |
+| 30° | 2.74e6 / 2.74e6 / 4.49e6 | 2.22e6 / 2.20e6 / 1.20e6 | −0.369 / −0.366 / −0.149 |
+
+The skins are meshed on their mid-surface (the `BladeBuilder` default). Thin-wall
+theory and PreComp take each wall's length on the outer mould line, which is a
+little longer than the mid-wall length, so they read EA and EI 0.4–0.7% above the
+shell model at 0°. With the skins left on the mould line and offset
+(`mesh_surface="outer"`), the shell model counts the same mould-line length and
+matches thin-wall EA and EI exactly, but its curved Quad8 facets then lose 1.6% of
+GJ (example 26).
 
 - **Left:** the section with its centres. The tension centre (51 mm aft of the
   pitch axis) sits where the carbon caps put it, the mass centre further aft
   (129 mm), pulled back by the long trailing-edge skin. The section weighs
-  17.5 kg/m. The shear centre lands within a millimetre of the pitch axis.
+  17.4 kg/m. The shear centre lands within a millimetre of the pitch axis.
 - **Middle:** turning the cap fibres costs axial and flap stiffness fast (EI
   flap falls to 0.39 of its 0° value at 20°) and gains torsional stiffness (GJ
   rises by about 27%). The shell model and thin-walled beam theory agree within
-  0.3% in EA and EI at every angle, and within 1.5% in GJ.
+  0.7% in EA and EI at every angle (the mould-line length above), and within 1% in
+  GJ.
 - **Right:** the bend-twist coupling coefficient S₁₄/√(S₁₁S₄₄). With +θ on one
   cap and −θ on the other, flap bending shears the two caps in opposite
   directions, and the closed section turns that into twist. The coupling peaks at
   about −0.40 near 20° and falls beyond as the caps lose stiffness. Shell and
-  thin-wall theory agree to the third decimal.
+  thin-wall theory agree within 1.5%.
 - **PreComp agrees at 0° in EA, EI and the tension centre (within 0.5%) but not
   in torsion or coupling.** Its GJ is 35% below the other two, and with off-axis
   caps it keeps far more flap stiffness (0.68 of the 0° value at 20°, against

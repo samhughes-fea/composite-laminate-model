@@ -1,13 +1,14 @@
 # 26 · Mould line with offsets, or mid-surface: two ways to mesh blade skins
 
-`BladeBuilder` meshes the skins on the outer mould line (OML) by default and
-offsets each laminate inward by half its thickness, as the laminate grows from the
-mould. Example 24 found that flat shells (Quad4, flat Quad8) then lose torsional
-stiffness in thick closed sections. `mesh_surface="mid"` is the other way: the skin
-nodes move onto the laminates' mid-surface and the offsets go. This example runs
+A blade skin is laid up inward from the outer mould line (OML). There are two ways
+to mesh it. `mesh_surface="outer"` keeps the nodes on the mould line and offsets
+each laminate inward by half its thickness. Flat shells (Quad4, flat Quad8) then
+lose torsional stiffness in thick closed sections. `mesh_surface="mid"` moves the
+skin nodes onto the laminates' mid-surface and the offsets go. This example runs
 both on a thick tube with a closed-form answer, and on the six IEA 15 MW stations of
 example 24 against PreComp and the published data. Each case runs with Quad4, flat
-Quad8 and curved Quad8.
+Quad8 and curved Quad8. What it found made the mid-surface the `BladeBuilder`
+default.
 
 ![A section meshed on the mould line and on the mid-surface, with close-ups of a spar-cap edge and the trailing edge](figures/mid_surface_section.png)
 
@@ -18,15 +19,16 @@ Quad8 and curved Quad8.
 ## How the mid-surface is made
 
 ```python
-blade = BladeBuilder(stations, regions, webs, n_span=32, mesh_surface="mid").build(laminates, FSDTModel())
+blade = BladeBuilder(stations, regions, webs, n_span=32).build(laminates, FSDTModel())  # mesh_surface="mid"
 
-# or after a Layup with ply drops, from a mould-line mesh:
+# after a Layup with ply drops (laid from the mould line), move it again:
 Layup(plies, reference="top").apply(blade.mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
 blade = blade.to_mid_surface()
 ```
 
-1. **Shift.** Every skin element knows where its plies are: its laminate offset
-   (−t/2 for a skin on the mould line). The shift of each skin node is the
+1. **Shift.** The builder first meshes the mould line, where every skin element
+   knows where its plies are: its laminate offset (−t/2 for a skin on the mould
+   line). The shift of each skin node is the
    area-weighted mean offset of the skin elements around it.
 2. **Smoothing.** The shifts are averaged along the skin with a hat kernel over
    paths shorter than `mid_surface_smoothing`. By default that is two of the
@@ -38,7 +40,11 @@ blade = blade.to_mid_surface()
    in their planes.
 4. **Offsets.** Each element keeps whatever offset still separates its plies from
    the moved surface. That is zero away from thickness changes, and small in the
-   blends, so every ply stays where it was through the thickness.
+   blends, so every ply stays where it was through the thickness. Residuals under
+   5% of the thickness are dropped: they only round off the smoothing, and many
+   slightly different offsets make CalculiX's shell expansion fail (example 25).
+   After a `Layup`, `to_mid_surface()` repeats steps 1–5 from the stored mould-line
+   mesh, with the new plies.
 5. **Webs.** The web nodes are re-spaced between their two joints, so the webs run
    between the skins' mid-surfaces.
 
@@ -136,7 +142,7 @@ GJ / PreComp for each element:
 
 ## Which to use
 
-| | mould line + offset (default) | mid-surface |
+| | mould line + offset | mid-surface (default) |
 |---|---|---|
 | Torsion of thick sections, flat elements | 20–35% low | exact |
 | Torsion, curved Quad8 | 2–5% low at the root | exact |
@@ -145,15 +151,15 @@ GJ / PreComp for each element:
 | Skin stresses at the mould surface | at the reference surface | through the ply stack as usual |
 | Cost | | the same mesh |
 
-Use the mid-surface for section properties and torsion, above all with Quad4. Keep
-the mould line where the outer geometry matters, for example when comparing with a
-CAD surface. To match PreComp like for like (example 24), the mould line is the
-closer of the two, because PreComp makes the same thin-wall area assumption.
+The mid-surface is the default: it is right for section properties and torsion
+with every element. Choose `mesh_surface="outer"` where the outer geometry matters,
+for example when comparing with a CAD surface, or to match PreComp's EA and mass
+exactly, since PreComp makes the same mould-line area assumption.
 
 ## Things to try
 
 - Run the stations with `mid_surface_smoothing=0.05` to see the cap edges sharpen.
-- Apply a spar-cap ply-drop `Layup` (example 21) to a mould-line blade, then call
-  `blade.to_mid_surface()`. The cap's mid-surface steps up at each drop.
+- Apply a spar-cap ply-drop `Layup` (example 21), then call
+  `blade = blade.to_mid_surface()`. The cap's mid-surface steps up at each drop.
 - Refine flat Quad8 around the section (`ELEMENTS["quad8"]`) and watch it close on
   curved Quad8.

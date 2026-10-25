@@ -13,8 +13,8 @@ goes to both solvers, once meshed with Quad4 shells and once with curved Quad8.
 |---|---|
 | Segment | IEA 15 MW blade from r = 64.5 m to r = 84.7 m (20.2 m), chord 4.07 m to 3.27 m, published twist (1.5° to −0.4°) |
 | Section | The r = 64.5 m station from example 24: FFA-W3 blend about 27% thick, 89 mm carbon spar caps (18–40% chord), 27 mm foam-cored glass panels, 30 mm glass UD trailing-edge reinforcement, two foam-cored webs, a 56 mm flatback trailing edge closed by a web |
-| Layup | The same along the segment (the r = 64.5 m station's sectors and laminae), skins on the outer mould line |
-| Meshes | Quad4 FSDT, 40 along the span (4840 elements); curved Quad8, 20 along the span (1460 elements) |
+| Layup | The same along the segment (the r = 64.5 m station's sectors and laminae), laid inward from the outer mould line; skins meshed on their mid-surface (the default) |
+| Meshes | Quad4 FSDT, 40 along the span (4760 elements); curved Quad8, 20 along the span (1380 elements). Sector edges closer than 0.3% of the chord are merged (see below) |
 | Support | Root section clamped |
 | Loads | Suction 1.7 kPa and pressure 0.8 kPa at the root, both rising 30% to the tip (about 10 kN/m flapwise); edgewise gravity; outboard shear at the tip, 250 kN flapwise on the web nodes and 60 kN edgewise on the skin nodes |
 
@@ -54,7 +54,7 @@ Without `ccx` the script says so and stops. It takes about two minutes.
    CalculiX accepts composite shells only as S8R, so the Quad4 mesh is promoted to
    S8R with straight-sided mid-side nodes, and the curved Quad8 mesh is written
    node for node. CalculiX then expands every S8R into a 20-node brick with the
-   plies inside it, so it treats the offset skins, the 95 mm thick caps, the
+   plies inside it, so it treats the skins, the 95 mm thick caps, the
    web-to-skin joints and the flatback corners in 3D.
 
 4. **Comparing.** Section deflection and twist come from the node translations
@@ -66,25 +66,30 @@ Without `ccx` the script says so and stops. It takes about two minutes.
 
 | | native | CalculiX S8R | difference |
 |---|---|---|---|
-| Tip flapwise deflection, Quad4 mesh | 301.5 mm | 304.6 mm | −1.0% |
-| Tip edgewise deflection, Quad4 mesh | −24.3 mm | −24.4 mm | −0.4% |
-| Tip twist, Quad4 mesh | 0.801° | 0.814° | −1.6% |
-| Tip flapwise deflection, curved Quad8 mesh | 301.1 mm | 304.1 mm | −1.0% |
-| Tip twist, curved Quad8 mesh | 0.795° | 0.791° | 0.5% |
-| Flapwise displacement, every node (Quad4 mesh) | | | max 1.2% of the peak |
-| Fibre stress in the suction cap at a quarter span | | | max 5.9% of the peak |
+| Tip flapwise deflection, Quad4 mesh | 300.3 mm | 299.8 mm | 0.2% |
+| Tip edgewise deflection, Quad4 mesh | −25.2 mm | −25.2 mm | 0.0% |
+| Tip twist, Quad4 mesh | 0.793° | 0.790° | 0.4% |
+| Tip flapwise deflection, curved Quad8 mesh | 300.2 mm | 299.5 mm | 0.2% |
+| Tip twist, curved Quad8 mesh | 0.768° | 0.759° | 1.2% |
+| Flapwise displacement, every node (Quad4 mesh) | | | max 0.3% of the peak |
+| Fibre stress in the suction cap at a quarter span | | | max 5.4% of the peak |
 | σ22 and τ12 in the sandwich panel at a quarter span | | | max 1.0% of the peak |
 
-Runtimes on one core: native 20 s, CalculiX 15 s for the Quad4 model (14,600 S8R
+Runtimes on one core: native 31 s, CalculiX 25 s for the Quad4 model (14,356 S8R
 nodes after promotion).
+
+With the skins on their mid-surface, the two solvers agree more closely in
+deflection than they did with the skins on the mould line and offset (the
+earlier default: native 1.0% below CalculiX in flap deflection and 1.6% in Quad4
+twist, 1.2% of the peak over all nodes).
 
 - **Top left:** flapwise and edgewise deflection along the segment; the two
   solvers lie on top of each other for both meshes.
 - **Top right:** twist. The flap load acts away from the shear centre and the
   segment twists by 0.8° over its length; the kink near the tip is where the tip
   forces go in on the web and skin nodes (the same nodal forces in both solvers).
-  Native Quad4 and curved Quad8 agree with each other; CalculiX on the promoted
-  Quad4 mesh (straight-sided S8R) twists 3% more than on the curved mesh.
+  The Quad4 mesh twists 3–4% more than the curved Quad8 mesh in both solvers
+  (the curved mesh is twice as coarse around the section).
 - **Bottom left:** fibre stress in the carbon of both caps, about −90 MPa
   (suction side, compression) and +90 MPa at the root, falling to zero at the tip.
   The CalculiX values sit on the native curves.
@@ -107,6 +112,16 @@ coefficient on the dependent side of an equation") and which turned some
 expanded bricks inside out at the flatback corners. Body loads are now written as
 `*DLOAD, GRAV`, which CalculiX integrates over the expanded bricks, so the
 offsets and ply densities are included directly.
+
+Moving the skins to their mid-surface exposed a limit of CalculiX's shell
+expansion. The PreComp sectors leave a few slivers, elements 5 mm wide at the
+spar-cap edges where the sector edges on the two surfaces nearly coincide. Next
+to a 95 mm cap whose mid-surface steps inwards, CalculiX turned their expanded
+bricks inside out ("nonpositive jacobian"). `_shared/iea15mw.py` now merges
+sector edges closer than 0.3% of the chord (12 mm here), which removes them. Many
+small residual offsets left by the mid-surface smoothing also made CalculiX run out
+of expansion nodes ("increase nk_"); `BladeMesh.to_mid_surface` now drops
+residual offsets under 5% of the laminate thickness.
 
 Clamped shell edges keep their rotation constraints. Without them CalculiX fixes
 only the mid-surface node of each expanded shell node and the edge becomes a

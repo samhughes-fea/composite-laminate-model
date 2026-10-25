@@ -41,7 +41,8 @@ It takes about two and a half minutes, most of it writing the ply-by-ply VTK fil
    ```
 
    Skin normals point outwards and the skin laminates grow inwards from the outer
-   mould line (`skin_reference="outer"`). The 0° direction follows the span.
+   mould line (`skin_reference="outer"`); the skins are then meshed on their
+   mid-surface (the default). The 0° direction follows the span.
 
 2. **The ply book.** Each `PlyDefinition` names a ply, its material, thickness and
    angle, the element set it lies on, and optionally a region function that cuts
@@ -51,8 +52,14 @@ It takes about two and a half minutes, most of it writing the ply-by-ply VTK fil
    ```python
    PlyDefinition("cap_12", glass, 1.0e-3, 0.0, elements="spar_cap", region=lambda x: x[2] < 4.0)
    layup = Layup(plies, name="cap", reference="top")
-   layup.apply(mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
+   layup.apply(blade.mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
+   blade = blade.to_mid_surface()
    ```
+
+   The ply book is laid from the mould line, as in the mould. `to_mid_surface()`
+   then moves the blade again from its mould line with the new plies, so the
+   cap's mid-surface steps inwards at every drop (smoothed over two cap
+   thicknesses), and the plies keep their place through the thickness.
 
 3. **Checking the schedule.** `layup.drops(...)` lists every element edge where a
    ply stops (144 here, both caps), `check_drops(max_per_step=2)` flags edges where
@@ -78,20 +85,23 @@ It takes about two and a half minutes, most of it writing the ply-by-ply VTK fil
 
 | | Shell model | Thin-walled beam |
 |---|---|---|
-| Tip flap deflection | 406.9 mm | 406.3 mm |
-| Cap strain at z = 1.0 m | −890 µε | −887 µε |
-| Cap strain at z = 4.5 m | −820 µε | −818 µε |
+| Tip flap deflection | 409.0 mm | 406.3 mm |
+| Cap strain at z = 1.0 m | −894 µε | −887 µε |
+| Cap strain at z = 4.5 m | −823 µε | −818 µε |
 | Cap strain at z = 8.5 m | −206 µε | −205 µε |
+
+The shell model is 0.5–0.8% softer than the beam: the beam's walls have their
+mould-line length, the shell's their mid-wall length (example 20).
 
 - **Left:** the cap steps from 22.5 mm to 10.5 mm in six 2 mm steps.
 - **Middle:** the spanwise strain at the mid-plane of the suction-side cap,
   against the beam. Between drops the compressive strain falls towards the tip
   with the bending moment; at each drop the cap loses two plies and the strain
-  steps up by about 8%. Shell and beam agree within 0.5% everywhere except right
+  steps up by about 8%. Shell and beam agree within 0.8% everywhere except right
   at each drop, where the shell spreads the step over one element and the beam
   jumps. (The strain is taken at the cap's own mid-plane. The shell reference
-  surface is the outer face, and the mid-plane steps inwards at every drop, so
-  strains at the reference surface mix in local bending from that step.)
+  surface follows that mid-plane, smoothed across the drops, so near a drop the
+  two are a little apart.)
 - **Right:** the worst Tsai-Wu index of each cap ply. The full-length plies peak
   at the root. The dropped plies that run furthest out score highest, because
   the cap they end in is thinner for its bending moment. All are low at this load
