@@ -18,7 +18,10 @@ Meshing         BladeBuilder (airfoil skins, spar caps, shear webs; Airfoil, Sta
                 SkinRegion, ShearWeb), RectangularPlateBuilder, CylindricalPanelBuilder,
                 GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
 Connections     add_reference_node, rigid_link (RBE2), distributing_link (RBE3)
-Beam properties beam_section_properties (EA, EI, GJ, couplings, shear/tension centres)
+Beam properties beam_section_properties (Timoshenko 6 x 6 with all couplings, classical
+                4 x 4, optional Timoshenko-Vlasov 7 x 7 with EΓ; shear/tension centres),
+                transform_beam_stiffness; ThinWalledSection.timoshenko_stiffness and
+                vlasov_stiffness (thin-wall theory)
 Torsion         ThinWalledSection (Saint-Venant shear flows and GJ, warping function,
                 shear centre, EΓ), RestrainedTorsionBeam (Benscoter / Vlasov: bimoment,
                 warping torque), GeneralizedBeam and SectionModes (GBT: warping and
@@ -192,6 +195,7 @@ from .laminate_blade import (
     SkinRegion,
     Station,
     beam_section_properties,
+    transform_beam_stiffness,
 )
 from .laminate_connectors import add_reference_node, distributing_link, rigid_link
 from .laminate_thin_wall import ThinWalledSection, Wall, condensed_wall_stiffness
