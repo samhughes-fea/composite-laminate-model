@@ -6,8 +6,21 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `blade_geometry_model` now holds a fork, with history, of blade-structure's
+  implicit section geometry: `section_geometry` (signed-distance solids with CSG,
+  40 structural layouts, wall midlines and cell-wall loops) with `section_contract`,
+  `coordinate_frames`, `area_2d` and `shoelace_integration`, and their 785 tests.
+  `src/blade_geometry_model/FORK.md` records the fork point and the files that stayed
+  in blade-structure.
+
 ### Changed
 
+- Python 3.11 or newer is required (the forked geometry needs it; 3.9 and 3.10 are
+  past end of life). Shapely and Numba are now dependencies.
+- pytest imports test modules by path (`--import-mode=importlib`) and also collects
+  the geometry's tests under `src/blade_geometry_model`.
 - The code is split into three packages, each depending only on the ones before it:
   `blade_geometry_model` (`Airfoil`, `Station`, `SkinRegion`, `ShearWeb`),
   `composite_laminate_model` (laminate mechanics, shell and solid FE, solver,

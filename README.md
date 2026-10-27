@@ -47,7 +47,12 @@ general laminate mechanics from thin plates to thick laminates:
 ├── src/
 │   ├── blade_geometry_model/               geometry only: no materials, no meshes
 │   │   ├── __init__.py                     public API and __version__
-│   │   └── blade_geometry.py               Airfoil (NACA 4-digit, ellipse, coordinates), Station, SkinRegion, ShearWeb
+│   │   ├── blade_geometry.py               Airfoil (NACA 4-digit, ellipse, coordinates), Station, SkinRegion, ShearWeb
+│   │   ├── section_geometry/               implicit (SDF / CSG) section geometry, forked from blade-structure
+│   │   ├── section_contract/               ShellMidlineStrip, CellWallLoop and the other hand-off types
+│   │   ├── coordinate_frames/              section and shell frame conventions and transforms
+│   │   ├── area_2d/, shoelace_integration/ area integration (quadtree and shoelace)
+│   │   └── FORK.md                         fork point, and the files left in blade-structure
 │   ├── composite_laminate_model/           laminate mechanics and shell / solid FEA
 │   │   ├── __init__.py                     public API and __version__ (pyproject reads it)
 │   │   ├── run_solver_benchmarks.py        benchmark runner (laminate-benchmarks command)
@@ -108,7 +113,7 @@ only on the ones before it:
 
 | Package | Holds | May import |
 | --- | --- | --- |
-| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb` | numpy (scipy optional) |
+| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, and the implicit section geometry forked from blade-structure (`section_geometry`: signed-distance solids, 40 structural layouts, wall midlines and cell-wall loops) | numpy, shapely, numba |
 | `composite_laminate_model` | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry |
 | `anisotropic_section_model` | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam` | the geometry, and `Laminate` and `integrate_abd` |
 
@@ -118,7 +123,7 @@ package. `tests/test_package_split.py` enforces this. The old import name,
 `laminate_modelling_package`, still works and re-exports everything; it will be
 removed after the first release.
 
-Python 3.9 or newer. SciPy is optional: without it the solver falls back to dense Cholesky.
+Python 3.11 or newer. NumPy, Shapely and Numba are required (the geometry's signed-distance kernels use Numba). SciPy is optional: without it the solver falls back to dense Cholesky.
 
 ## Quick start
 

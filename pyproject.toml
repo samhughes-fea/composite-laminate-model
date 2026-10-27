@@ -10,8 +10,8 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Sam Hughes" }]
-requires-python = ">=3.9"
-dependencies = ["numpy>=1.22"]
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.22", "shapely>=2.0", "numba>=0.59"]
 keywords = [
     "composites", "laminate", "finite element", "FEA", "shell", "wind turbine blade",
     "classical laminate theory", "failure criteria", "CalculiX", "Nastran",
@@ -22,8 +22,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -52,5 +50,9 @@ version = { attr = "composite_laminate_model.__version__" }
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+# the forked geometry keeps its tests next to its code, in folders that share names
+# (tests/, examples/), so modules are imported by path rather than by package
+addopts = "--import-mode=importlib"
+testpaths = ["tests", "src/blade_geometry_model"]
+pythonpath = ["src", "tests"]
+markers = ["frame_comparison: coordinate-frame convention checks from the forked geometry"]
