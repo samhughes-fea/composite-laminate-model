@@ -1,13 +1,14 @@
 # 26 · Mould line with offsets, or mid-surface: two ways to mesh blade skins
 
-`BladeBuilder` meshes the skins on the outer mould line (OML) by default and
-offsets each laminate inward by half its thickness, as the laminate grows from the
-mould. Example 24 found that flat shells (Quad4, flat Quad8) then lose torsional
-stiffness in thick closed sections. `mesh_surface="mid"` is the other way: the skin
-nodes move onto the laminates' mid-surface and the offsets go. This example runs
+A blade skin is laid up inward from the outer mould line (OML). There are two ways
+to mesh it. `mesh_surface="outer"` keeps the nodes on the mould line and offsets
+each laminate inward by half its thickness. Flat shells (Quad4, flat Quad8) then
+lose torsional stiffness in thick closed sections. `mesh_surface="mid"` moves the
+skin nodes onto the laminates' mid-surface and the offsets go. This example runs
 both on a thick tube with a closed-form answer, and on the six IEA 15 MW stations of
 example 24 against PreComp and the published data. Each case runs with Quad4, flat
-Quad8 and curved Quad8.
+Quad8 and curved Quad8. What it found made the mid-surface the `BladeBuilder`
+default.
 
 ![A section meshed on the mould line and on the mid-surface, with close-ups of a spar-cap edge and the trailing edge](figures/mid_surface_section.png)
 
@@ -18,15 +19,16 @@ Quad8 and curved Quad8.
 ## How the mid-surface is made
 
 ```python
-blade = BladeBuilder(stations, regions, webs, n_span=32, mesh_surface="mid").build(laminates, FSDTModel())
+blade = BladeBuilder(stations, regions, webs, n_span=32).build(laminates, FSDTModel())  # mesh_surface="mid"
 
-# or after a Layup with ply drops, from a mould-line mesh:
+# after a Layup with ply drops (laid from the mould line), move it again:
 Layup(plies, reference="top").apply(blade.mesh, blade.element_sets, element_ids=blade.elements("spar_cap"))
 blade = blade.to_mid_surface()
 ```
 
-1. **Shift.** Every skin element knows where its plies are: its laminate offset
-   (−t/2 for a skin on the mould line). The shift of each skin node is the
+1. **Shift.** The builder first meshes the mould line, where every skin element
+   knows where its plies are: its laminate offset (−t/2 for a skin on the mould
+   line). The shift of each skin node is the
    area-weighted mean offset of the skin elements around it.
 2. **Smoothing.** The shifts are averaged along the skin with a hat kernel over
    paths shorter than `mid_surface_smoothing`. By default that is two of the
@@ -38,7 +40,11 @@ blade = blade.to_mid_surface()
    in their planes.
 4. **Offsets.** Each element keeps whatever offset still separates its plies from
    the moved surface. That is zero away from thickness changes, and small in the
-   blends, so every ply stays where it was through the thickness.
+   blends, so every ply stays where it was through the thickness. Residuals under
+   5% of the thickness are dropped: they only round off the smoothing, and many
+   slightly different offsets make CalculiX's shell expansion fail (example 25).
+   After a `Layup`, `to_mid_surface()` repeats steps 1–5 from the stored mould-line
+   mesh, with the new plies.
 5. **Webs.** The web nodes are re-spaced between their two joints, so the webs run
    between the skins' mid-surfaces.
 
@@ -71,10 +77,10 @@ python examples/26_mid_surface_meshing/mid_surface_meshing.py --rerun    # all 4
 | flat Quad8, mould line + offset | 0.976 | 0.923 | 0.778 | 0.643 |
 | curved Quad8, mould line + offset | 0.994 | 0.988 | 0.977 | 0.967 |
 | Quad4, mid-surface | 0.999 | 0.999 | 0.999 | 0.998 |
-| flat Quad8, mid-surface | 1.002 | 1.002 | 1.002 | 1.002 |
+| flat Quad8, mid-surface | 1.002 | 1.002 | 1.003 | 1.003 |
 | curved Quad8, mid-surface | 1.000 | 1.000 | 1.000 | 1.000 |
 
-On the mid-surface, all three elements are exact to 0.2% in torsion and axial
+On the mid-surface, all three elements are exact to 0.3% in torsion and axial
 stiffness. On the mould line, the flat elements lose up to 35% of GJ, and even
 curved Quad8 is 3% low at t/R = 0.06.
 
@@ -91,22 +97,27 @@ Curved Quad8 against PreComp and the published data:
 | r [m] | GJ / PreComp, outer → mid | GJ / published, outer → mid | EA / PreComp, outer → mid | mass / published, outer → mid |
 |---|---|---|---|---|
 | 4.0 (root tube) | 0.952 → 0.981 | 0.972 → **1.001** | 1.000 → 0.981 | 1.020 → **1.000** |
-| 28.2 (max chord) | 1.003 → 1.034 | 0.877 → 0.904 | 1.001 → 0.989 | 0.981 → 0.968 |
-| 44.3 | 1.155 → 1.171 | 0.975 → 0.988 | 1.001 → 0.987 | 1.029 → 1.014 |
-| 64.5 | 1.197 → 1.214 | 0.939 → 0.952 | 1.001 → 0.984 | 1.075 → 1.057 |
-| 84.7 | 1.373 → 1.400 | 0.894 → 0.911 | 1.000 → 0.988 | 1.041 → 1.027 |
-| 104.8 | 2.143 → 2.189 | 0.838 → 0.856 | 1.001 → 0.997 | 0.957 → 0.951 |
+| 28.2 (max chord) | 1.004 → 1.038 | 0.878 → 0.908 | 1.008 → 0.995 | 0.983 → 0.970 |
+| 44.3 | 1.155 → 1.174 | 0.974 → 0.991 | 1.000 → 0.987 | 1.029 → 1.014 |
+| 64.5 | 1.197 → 1.218 | 0.939 → 0.955 | 0.999 → 0.983 | 1.074 → 1.057 |
+| 84.7 | 1.377 → 1.410 | 0.896 → 0.918 | 1.001 → 0.988 | 1.041 → 1.027 |
+| 104.8 | 2.155 → 2.208 | 0.843 → 0.864 | 1.001 → 0.997 | 0.957 → 0.951 |
 
 GJ / PreComp for each element:
 
 | r [m] | Quad4 outer | Quad4 mid | flat Quad8 outer | flat Quad8 mid | curved Quad8 outer | curved Quad8 mid |
 |---|---|---|---|---|---|---|
 | 4.0 | 0.767 | 0.980 | 0.672 | 0.983 | 0.952 | 0.981 |
-| 28.2 | 0.941 | 1.034 | 0.924 | 1.049 | 1.003 | 1.034 |
-| 44.3 | 1.108 | 1.171 | 1.090 | 1.214 | 1.155 | 1.171 |
-| 64.5 | 1.168 | 1.228 | 1.145 | 1.284 | 1.197 | 1.214 |
-| 84.7 | 1.358 | 1.418 | 1.383 | 1.599 | 1.373 | 1.400 |
-| 104.8 | 2.143 | 2.203 | 2.173 | 2.424 | 2.143 | 2.189 |
+| 28.2 | 0.943 | 1.038 | 0.928 | 1.054 | 1.004 | 1.038 |
+| 44.3 | 1.108 | 1.173 | 1.095 | 1.215 | 1.155 | 1.174 |
+| 64.5 | 1.168 | 1.228 | 1.148 | 1.281 | 1.197 | 1.218 |
+| 84.7 | 1.360 | 1.429 | 1.388 | 1.613 | 1.377 | 1.410 |
+| 104.8 | 2.157 | 2.220 | 2.188 | 2.442 | 2.155 | 2.208 |
+
+The sections are those of example 24, with PreComp sector edges closer than 0.3%
+of the chord merged. Against the unmerged sectors that moves EA at the max-chord
+station by 0.7% and GJ at the tip station by 0.6%; elsewhere the change is
+smaller.
 
 - **The mid-surface makes Quad4 as good as curved Quad8.** On the mould line,
   Quad4 is 20% below curved Quad8 in GJ at the root tube and 6% below at max chord.
@@ -128,15 +139,16 @@ GJ / PreComp for each element:
 - **Flat Quad8 on the mid-surface converges slowly around the section.** It
   matches the other elements at the root and on the tube. On the thin outboard
   sections, though, its GJ is 4–14% above Quad4 and curved Quad8. At r = 84.7 m,
-  halving the chordwise element size brings it from 1.599 to 1.457 of PreComp,
-  and doubling the spanwise elements instead brings it to 1.500, both towards
-  curved Quad8's 1.400. A flat Quad8 projects its curved mid-side geometry
+  halving the chordwise element size brought it from 1.599 to 1.457 of PreComp,
+  and doubling the spanwise elements instead to 1.500, both towards curved
+  Quad8's 1.400. (That study ran before the sector merge; with it, the base
+  values are 1.613 for flat Quad8 and 1.410 for curved Quad8.) A flat Quad8 projects its curved mid-side geometry
   onto one plane, which a thin, strongly curved section shows up. Use Quad4 or
   curved Quad8 on the mid-surface.
 
 ## Which to use
 
-| | mould line + offset (default) | mid-surface |
+| | mould line + offset | mid-surface (default) |
 |---|---|---|
 | Torsion of thick sections, flat elements | 20–35% low | exact |
 | Torsion, curved Quad8 | 2–5% low at the root | exact |
@@ -145,15 +157,15 @@ GJ / PreComp for each element:
 | Skin stresses at the mould surface | at the reference surface | through the ply stack as usual |
 | Cost | | the same mesh |
 
-Use the mid-surface for section properties and torsion, above all with Quad4. Keep
-the mould line where the outer geometry matters, for example when comparing with a
-CAD surface. To match PreComp like for like (example 24), the mould line is the
-closer of the two, because PreComp makes the same thin-wall area assumption.
+The mid-surface is the default: it is right for section properties and torsion
+with every element. Choose `mesh_surface="outer"` where the outer geometry matters,
+for example when comparing with a CAD surface, or to match PreComp's EA and mass
+exactly, since PreComp makes the same mould-line area assumption.
 
 ## Things to try
 
 - Run the stations with `mid_surface_smoothing=0.05` to see the cap edges sharpen.
-- Apply a spar-cap ply-drop `Layup` (example 21) to a mould-line blade, then call
-  `blade.to_mid_surface()`. The cap's mid-surface steps up at each drop.
+- Apply a spar-cap ply-drop `Layup` (example 21), then call
+  `blade = blade.to_mid_surface()`. The cap's mid-surface steps up at each drop.
 - Refine flat Quad8 around the section (`ELEMENTS["quad8"]`) and watch it close on
   curved Quad8.

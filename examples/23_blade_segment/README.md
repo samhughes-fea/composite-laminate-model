@@ -76,15 +76,16 @@ It takes about two minutes, most of it writing the ply-by-ply VTK file.
   wide between the aft web and the trailing edge, bulge under the surface
   pressures by about 2 mm, and the trailing edge drops by 3 mm. A beam model
   assumes none of this.
-- **Middle:** flap deflection reaches 457 mm in the shell and 443 mm in the beam
-  (3% apart), edge deflection 11.7 mm and 10.7 mm. The beam leaves out shear
+- **Middle:** flap deflection reaches 457 mm in the shell and 444 mm in the beam
+  (3% apart), edge deflection 11.6 mm and 10.7 mm. The beam leaves out shear
   deformation of the webs and the panel distortion, so it is slightly stiffer. Tip
-  twist is 0.56° in the shell and 0.63° in the beam: the clamp's warping restraint
-  stiffens the shell in torsion near the root.
+  twist is 0.53° in the shell and 0.61° in the beam (13% apart): the clamp's
+  warping restraint stiffens the shell in torsion near the root. (On the mould
+  line with offset skins, the earlier default, the two were 11% apart.)
 - **Right:** the worst Tsai-Wu index beyond the root boundary layer. The spar caps
-  (0.37) and webs (0.36) carry the most; the panels are lower (0.26 to 0.28) and
+  (0.36) and webs (0.35) carry the most; the panels are lower (0.26 to 0.28) and
   the foam cores lower still (0.04 to 0.06). In the first chord from the clamp the
-  indices are 1.3 to 2.3 times higher (0.64 in the LE panel faces).
+  indices are 1.3 to 2.3 times higher (0.63 in the LE panel faces).
 
 Open `vtk/blade_segment.vtu` in ParaView for the deformed shape and stress
 resultants, and `vtk/blade_segment_plies.vtu` for each ply's failure index.

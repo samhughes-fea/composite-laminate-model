@@ -11,7 +11,7 @@ published data.
 
 ![EA, EI, GJ and mass along the span: shell model, PreComp and the published data](figures/iea15mw_properties.png)
 
-![Torsion of offset skins on flat and curved shells: a thick tube and the blade](figures/iea15mw_torsion.png)
+![Torsion: a thick tube meshed on its mid-surface and on its outer surface, and GJ of the blade](figures/iea15mw_torsion.png)
 
 ## The reference data
 
@@ -40,10 +40,10 @@ chord frame, for a prismatic segment.
 | Item | Value |
 |---|---|
 | Segment | Prismatic, 8 chords long, properties measured over the middle fifth |
-| Elements | Curved Quad8 FSDT, 32 along the span, chordwise size 1.5% of the perimeter (2300–3600 elements); a Quad4 model (40 along the span, 1%) for the torsion comparison |
-| Skins | On the outer mould line, laminates growing inward, as PreComp has them |
-| Regions | Every sector boundary on either surface and every web is a region boundary; each region takes its surface's sector laminate |
-| Webs | Straight, between the skins' outer mould lines at the PreComp web positions, as PreComp has them |
+| Elements | Curved Quad8 FSDT, 32 along the span, chordwise size 1.5% of the perimeter (2300–3400 elements); a Quad4 model (40 along the span, 1%) for the torsion comparison |
+| Skins | Laminates growing inward from the outer mould line, as PreComp has them, meshed on their mid-surface (the `BladeBuilder` default) |
+| Regions | Every sector boundary on either surface and every web is a region boundary (boundaries closer than 0.3% of the chord merged); each region takes its surface's sector laminate |
+| Webs | Straight, at the PreComp web positions, between the skins' mid-surfaces |
 | Trailing edge | Flatbacks closed by a web with the trailing-edge laminate; gaps under 1% of the chord are pinched closed |
 
 ```bash
@@ -76,36 +76,45 @@ It takes about 15 minutes (six curved-Quad8 and six Quad4 models).
    bending stiffnesses and GJ. Its axes turn out to be chord-aligned (its tension
    centre matches PreComp's at every station), so its shear centre is shown too.
 
-3. **Torsion check.** A thick steel tube with a known GJ is run with the skin on
-   its mid-surface and offset to its outer surface, on flat and curved shells.
+3. **Torsion check.** A thick steel tube with a known GJ is meshed on its
+   mid-surface (the default) and on its outer surface with the skin offset
+   inward, on flat and curved shells.
 
 ## Results
 
 | Station r [m] | EA | EI flap | EI edge | GJ | mass | tension centre x/c | shear centre x/c (shell / PreComp / published) |
 |---|---|---|---|---|---|---|---|
-| 4.0 | 1.000 | 1.000 | 1.000 | 0.952 | 1.000 | 0.500 / 0.500 | 0.494 / 0.500 / 0.500 |
-| 28.2 | 1.001 | 1.001 | 1.003 | 1.003 | 1.000 | 0.420 / 0.420 | 0.317 / 0.418 / 0.322 |
-| 44.3 | 1.001 | 1.000 | 1.000 | 1.155 | 1.000 | 0.367 / 0.366 | 0.285 / 0.362 / 0.290 |
-| 64.5 | 1.001 | 1.001 | 1.001 | 1.197 | 1.000 | 0.355 / 0.355 | 0.262 / 0.353 / 0.268 |
-| 84.7 | 1.000 | 1.001 | 0.998 | 1.373 | 0.999 | 0.320 / 0.320 | 0.233 / 0.320 / 0.255 |
-| 104.8 | 1.001 | 1.001 | 1.001 | 2.143 | 1.000 | 0.332 / 0.333 | 0.249 / 0.333 / 0.279 |
+| 4.0 | 0.981 | 0.981 | 0.981 | 0.981 | 0.981 | 0.500 / 0.500 | 0.500 / 0.500 / 0.500 |
+| 28.2 | 0.995 | 0.998 | 0.986 | 1.038 | 0.988 | 0.419 / 0.420 | 0.311 / 0.418 / 0.322 |
+| 44.3 | 0.987 | 0.988 | 0.986 | 1.174 | 0.985 | 0.365 / 0.366 | 0.284 / 0.362 / 0.290 |
+| 64.5 | 0.983 | 0.984 | 0.984 | 1.218 | 0.983 | 0.354 / 0.355 | 0.264 / 0.353 / 0.268 |
+| 84.7 | 0.988 | 0.988 | 0.994 | 1.410 | 0.986 | 0.319 / 0.320 | 0.237 / 0.320 / 0.255 |
+| 104.8 | 0.997 | 0.996 | 1.001 | 2.208 | 0.994 | 0.332 / 0.333 | 0.250 / 0.333 / 0.279 |
 
 Stiffness and mass columns are shell model / PreComp.
 
-- **Axial, bending, mass, tension centre: agree.** EA, both bending stiffnesses
-  and the mass are within 0.3% of PreComp at every station,
-  and the tension and mass centres within 0.1% of the chord. Since the geometry,
-  layup and materials are identical, this checks the section builder (airfoil,
-  sector mapping, laminate order, offsets, webs) and the stiffness extraction.
+- **Axial, bending, mass, tension centre: 0–2% below PreComp, for a known
+  reason.** EA, both bending stiffnesses and the mass are 0.981–1.001 of PreComp,
+  and the tension and mass centres agree within 0.1% of the chord. PreComp takes
+  each laminate's area as its mould-line length × thickness. The shell model,
+  meshed on the mid-surface, takes the mid-wall length, which is shorter by
+  about π t around a closed section. At the root tube (t/R = 0.04) that is the
+  1 − t/2R = 0.981 of the table, and there the shell model matches the published
+  data exactly: EA 4.605e10 against 4.605e10, mass 3127 against 3127 kg/m, GJ
+  8.756e10 against 8.749e10. With the skins left on the mould line
+  (`mesh_surface="outer"`), the shell model counts the same mould-line area as
+  PreComp and agrees with it within 0.3% at every station (example 26).
+  Either way the geometry, layup and materials are identical, so this checks the
+  section builder (airfoil, sector mapping, laminate order, webs) and the
+  stiffness extraction.
 - **Shear centre: follows the published data, not PreComp.** PreComp puts the
   shear centre on top of the tension centre at every station. The shell model
   puts it 8–10% of the chord further forward, between the webs, within 0.6% of
   the chord of the published value inboard and 2–3% outboard.
 - **GJ: between PreComp and the published data, closer to the published.** At
-  the root tube the shell model is 3% under the published GJ (the offset skin's
-  area is taken on the outer surface, as in the tube check) and PreComp is 2%
-  over it. Outboard, PreComp falls below half of the published GJ while the shell
-  model stays within 3–16% of it. PreComp's torsion comes from a simplified
+  the root tube the shell model is within 0.1% of the published GJ and PreComp is
+  2% over it. Outboard, PreComp falls below half of the published GJ while the
+  shell model stays within 1–14% of it. PreComp's torsion comes from a simplified
   thin-wall shear-flow model, and published comparisons with finite-element
   section tools (VABS, BECAS) report its torsional stiffness and shear centre as
   its least reliable outputs, which is what this shows.
@@ -115,28 +124,31 @@ Stiffness and mass columns are shell model / PreComp.
 
 ### Offset skins on flat shells lose torsion
 
-The torsion figure is the finding of this check. With the skin offset to the
-outer surface, flat facets (Quad4 and flat Quad8) under-predict the torsional
-stiffness of a thick tube: by 2% at t/R = 0.01, 7% at 0.02, 22% at 0.04 and 35% at
-0.06, and refining the mesh does not help. With the skin on its mid-surface the
-same Quad4 mesh is exact, and curved Quad8 with the offset is within 1–3% (the
-rest is the offset skin's area, taken on the outer surface; EA is high by the
-same amount). Bending and axial stiffness are not affected.
+The torsion figure is why the skins are meshed on their mid-surface. Meshed on the
+outer surface with the skin offset inward, flat facets (Quad4 and flat Quad8)
+under-predict the torsional stiffness of a thick tube: by 2% at t/R = 0.01, 7% at
+0.02, 22% at 0.04 and 35% at 0.06, and refining the mesh does not help. Meshed on
+its mid-surface the same Quad4 mesh is exact (0.999 at every thickness), and
+curved Quad8 with the offset is within 1–3% (the rest is the offset skin's area,
+taken on the outer surface; EA is high by the same amount). Bending and axial
+stiffness are not affected.
 
-On the blade this costs the Quad4 model 20% of GJ at the root tube (t/R = 0.04)
-and 6% at the max-chord station; elsewhere it is within 5% of curved Quad8. The
-likely mechanism: at a kink between two flat facets, a node's rotation about its
-own normal is a bending rotation for the neighbouring facets, and through the
-offset it moves their mid-surfaces in-plane at little cost (the error grows as
-the drilling stiffness is lowered). Curved Quad8 has a continuous normal and no
-kinks. Until the flat elements are fixed, use `element="quad8_curved"` where
-torsion of thick-walled sections matters; `tests/test_blade.py` records the
-limitation as an expected failure.
+On the blade, with the mid-surface default, the Quad4 model agrees with
+curved Quad8 in GJ within 1.3% at every station (0.980 against 0.981 of PreComp at the root
+tube). On the mould line with offsets it lost 20% of GJ at the root tube and 6% at
+max chord (example 26). The likely mechanism: at a kink between two flat facets, a
+node's rotation about its own normal is a bending rotation for the neighbouring
+facets, and through the offset it moves their mid-surfaces in-plane at little cost
+(the error grows as the drilling stiffness is lowered). Curved Quad8 has a
+continuous normal and no kinks. `tests/test_blade.py` records the limitation on
+mould-line meshes as an expected failure.
 
 ## Things to try
 
 - Add stations: edit `TARGETS` in `data/prepare_reference_data.py` and rerun it
   (needs `pip install wisdem pyyaml`).
-- Set `QUAD4` as the main model to see the root-tube GJ fall.
+- Pass `mesh_surface="outer"` to `build_segment` to put the skins back on the
+  mould line: EA and mass then match PreComp within 0.3%, and the Quad4 root-tube
+  GJ falls by 20%.
 - Compare the flap-edge coupling `EI_flap_edge` with PreComp's `EI_flap_edge`
   in the JSON, both in the chord frame.

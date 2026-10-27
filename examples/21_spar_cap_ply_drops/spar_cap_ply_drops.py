@@ -4,7 +4,9 @@ The segment runs 10 m from a 1.2 m NACA 0024 root to a 0.6 m NACA 0018 tip with 
 degrees of twist. Skins, webs and the spar caps come from ``BladeBuilder``; the caps
 are then rebuilt from a ply book (``Layup``): skin plies run over the whole cap, eight
 unidirectional cap plies run the full length and twelve more stop in pairs between
-2 m and 7 m, the way a real cap tapers towards the tip.
+2 m and 7 m, the way a real cap tapers towards the tip. The ply book is laid from
+the outer mould line, as in the mould, and the blade is then moved onto the skins'
+mid-surface (``blade.to_mid_surface()``), which now follows the ply drops.
 
 A flap pressure that grows linearly along the span loads the pressure side. The
 ply book reports where every ply stops, checks that no more than two plies stop on
@@ -114,10 +116,12 @@ def main():
                 Station(LENGTH, 0.6, Airfoil.naca4("0018"), twist=-6.0, pitch_axis=0.35)]
     blade = BladeBuilder(stations, REGIONS, WEBS, n_span=N_SPAN).build(
         {"le_panel": skin, "te_panel": skin, "spar_cap": skin, "web_fwd": web, "web_aft": web}, FSDTModel())
-    mesh = blade.mesh
     layup = ply_book(glass)
     caps = blade.elements("spar_cap")
-    layup.apply(mesh, blade.element_sets, element_ids=caps)
+    layup.apply(blade.mesh, blade.element_sets, element_ids=caps)
+    # the blade is meshed on its skins' mid-surface: move it again for the ply book
+    blade = blade.to_mid_surface()
+    mesh = blade.mesh
 
     drops = layup.drops(mesh, blade.element_sets)
     print(f"{len(drops)} ply-drop edges; plies stopping: {sorted({d.ply for d in drops})}")
