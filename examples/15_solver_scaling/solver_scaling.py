@@ -65,11 +65,15 @@ def main():
     print(f"{'mesh':>6}{'DOF':>8}{'assembly':>10}{'sparse':>10}{'dense':>10}{'ccx':>10}   [s]")
     with tempfile.TemporaryDirectory() as work:
         for n in MESHES:
+            # a fresh mesh for each timing: elements cache their integration-point geometry
             mesh, bcs, loads = model(lam, n)
             t_asm, _ = timed(lambda: GlobalAssembler().assemble_stiffness(mesh))
+            mesh, bcs, loads = model(lam, n)
             t_sparse, sol = timed(lambda: StructuralGlobalSolver(linear_solver=SparseLinearSolver()).solve(mesh, bcs, loads))
-            t_dense = timed(lambda: StructuralGlobalSolver(linear_solver=DenseLinearSolver()).solve(mesh, bcs, loads))[0] \
-                if n <= DENSE_LIMIT else np.nan
+            t_dense = np.nan
+            if n <= DENSE_LIMIT:
+                mesh, bcs, loads = model(lam, n)
+                t_dense = timed(lambda: StructuralGlobalSolver(linear_solver=DenseLinearSolver()).solve(mesh, bcs, loads))[0]
             t_ccx = np.nan
             if has_ccx:
                 run = CalculiXKernelAdapter(work_dir=Path(work) / f"n{n}").run(AnalysisModel(mesh, bcs, loads, f"plate{n}"))

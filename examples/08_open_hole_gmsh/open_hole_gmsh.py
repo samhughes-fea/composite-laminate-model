@@ -11,7 +11,7 @@ The finite-width correction Kt = Kt_inf * (2 + (1 - d/W)^3) / (3 (1 - d/W)) is
 applied, and the stress decay away from the hole is compared with the
 Konish-Whitney approximation.
 
-Needs Gmsh: pip install "laminate_modelling_package[gmsh]".
+Needs Gmsh: pip install "composite-laminate-fea[gmsh]".
 """
 
 import sys
@@ -81,9 +81,9 @@ def solve(gm):
 
 def main():
     card = create_default_library().get("T300/5208")
-    # Quad4: Kt is read from nodal averages at the hole, which suits linear elements (example 18 compares types)
-    builder = GmshPlateBuilder(L, W, [CircularHole(L / 2, W / 2, R)], size=0.012, hole_size=0.0003, transition=6,
-                               element="quad4")
+    # The default curved Quad8: quadratic elements resolve the narrow peak of the stiff stacks
+    # best (example 18 compares the element types)
+    builder = GmshPlateBuilder(L, W, [CircularHole(L / 2, W / 2, R)], size=0.012, hole_size=0.0003, transition=6)
     results = {}
     print(f"{'laminate':<16}{'Kt FE':>8}{'Kt Lekhnitskii':>16}{'difference':>12}")
     for name, angles in LAMINATES.items():
@@ -107,7 +107,8 @@ def main():
 
     show = results["[0/45/-45/90]s"]
     elements = show["ex"].elements()
-    quads = [e.coordinates[:, :2] * 1e3 for e in show["gm"].mesh.elements]
+    order = {4: [0, 1, 2, 3], 8: [0, 4, 1, 5, 2, 6, 3, 7]}
+    quads = [e.coordinates[order[len(e.node_ids)], :2] * 1e3 for e in show["gm"].mesh.elements]
     patches = PolyCollection(quads, array=elements.N[:, 0] / NX, cmap=SEQUENTIAL, edgecolors="face", linewidths=0.2)
     ax0.add_collection(patches)
     ax0.add_collection(PolyCollection(quads, facecolors="none", edgecolors="#0b0b0b", linewidths=0.15, alpha=0.35))
@@ -145,7 +146,8 @@ def main():
     ax2.set_xticks(positions)
     ax2.set_xticklabels(names, rotation=20)
     ax2.set_ylabel("Kt at the hole edge")
-    ax2.set_title("FE Kt within 5% of Lekhnitskii")
+    worst = max(abs(r["ratio"][0] / r["kt"] - 1) for r in results.values())
+    ax2.set_title(f"FE Kt within {100 * worst:.0f}% of Lekhnitskii")
     ax2.grid(axis="x", visible=False)
     ax2.set_axisbelow(True)
     ax2.legend(loc="upper right")

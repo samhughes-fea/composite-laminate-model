@@ -43,21 +43,38 @@ At each load factor the analysis:
 failure index and maximum displacement of every step. `result.first_ply_failure_factor`
 gives the first-ply failure load.
 
+## The reference: ply discount on the laminate
+
+The same criterion and knockdown can be worked by hand on the laminate, with no
+mesh: under N_x alone every element of the strip has the same strains, so
+classical laminate theory is exact. `clt_ply_discount` in the script finds the
+lowest N_x at which a ply gains a new failure mode, knocks that ply (and its
+symmetric partner) down with the same `SmearedCrackDegradation`, rebuilds A and
+repeats until a fibre fails. This is the textbook ply-discount method.
+
 ## Reading the figure
 
-| Event | N_x |
-|---|---|
-| First-ply failure, laminate theory | 374.3 kN/m |
-| First-ply failure, FE (Hashin 3D matrix tension in the 90° plies) | 375 kN/m (first load step above 374.3) |
-| Fibre failure of the 0° plies | 775 kN/m |
+| Event | CLT ply discount | FE (load steps of 25 kN/m) |
+|---|---|---|
+| First-ply failure: matrix tension in the 90° plies | 374.3 kN/m | 375 kN/m, the first step above |
+| Axial modulus after the 90° plies crack | 96.0 → 90.9 GPa | 90.9 GPa |
+| Fibre tension in the 0° plies (laminate failure) | 750.4 kN/m | 775 kN/m, the first step above |
 
-- **Left:** the load-strain line follows the undamaged stiffness up to
-  first-ply failure, then bends. Once the 90° plies have cracked, the axial
-  stiffness is about 5% lower, which matches the small share the 90° plies
-  carry along x. The 0° plies then take the load until their fibres fail.
+- **Left:** the FE load-strain points lie on the CLT ply-discount line. Up to
+  first-ply failure both follow the undamaged stiffness. At 375 kN/m the 90°
+  plies crack, the knockdown is instant, so the strain jumps at constant load
+  to the cracked laminate's line, 5% softer, which is the small share of the
+  axial load the 90° plies carried. The 0° plies then take the load until their
+  fibres fail at 750 kN/m.
 - **Right:** all 32 ply-elements in the 90° plies (50% of the total) crack in
   the same step because the stress is uniform. The 0° plies follow when they
   reach fibre failure.
 
-The degradation is instant and depends on the mesh, and post-failure points are
-not drawn beyond fibre failure. Energy-regularised damage is on the roadmap.
+Both methods agree to the load step because the stress field is uniform. Where
+it is not (holes, ply drops, joints), the FE analysis tracks damage element by
+element, which the laminate-level method cannot.
+
+The knockdown is instant and the post-failure branch is not drawn beyond fibre
+failure. This ply-by-ply stiffness knockdown is the package's damage model by
+design: it gives first-ply to last-ply load paths and stiffness loss, not crack
+growth, so the softening after failure depends on the mesh.

@@ -25,7 +25,7 @@ import numpy as np
 
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from laminate_modelling_package import CalculiXKernelAdapter, NativePythonKernelAdapter, StressDistributionVerifier
-from run_solver_benchmarks import build_model
+from laminate_modelling_package.run_solver_benchmarks import build_model
 
 WORK_DIR = Path(__file__).resolve().parent / "calculix_run"
 

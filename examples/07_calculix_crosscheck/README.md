@@ -8,7 +8,7 @@ displacements and ply stresses.
 
 ## The model
 
-The model is the one the `laminate-benchmarks` runner (`src/run_solver_benchmarks.py`) builds:
+The model is the one the `laminate-benchmarks` runner (`laminate_modelling_package.run_solver_benchmarks`) builds:
 
 | Item | Value |
 |---|---|
@@ -52,12 +52,12 @@ python examples/07_calculix_crosscheck/calculix_crosscheck.py
 
 | Quantity | Max error / peak |
 |---|---|
-| UX | 0.52% |
-| UY | 0.62% |
-| UZ | 1.14% |
-| σ11 at the centre element | 1.56% |
-| σ22 | 0.34% |
-| τ12 | 0.1% of the largest stress (13.7% of its own small peak) |
+| UX | 0.49% |
+| UY | 0.58% |
+| UZ | 1.12% |
+| σ11 at the centre element | 1.64% |
+| σ22 | 0.36% |
+| τ12 | 0.1% of the largest stress (14.4% of its own small peak) |
 
 - **Left:** every corner node's deflection lies on the line of perfect
   agreement. The 1% difference comes from the two element formulations

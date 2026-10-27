@@ -1,6 +1,9 @@
 # composite-laminate-fea
 
-`laminate_modelling_package` is a Python suite for the linear static analysis of
+[![tests](https://github.com/samhughes-fea/composite-laminate-fea/actions/workflows/tests.yml/badge.svg)](https://github.com/samhughes-fea/composite-laminate-fea/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/samhughes-fea/composite-laminate-fea/blob/main/LICENSE)
+
+`laminate_modelling_package` (distributed as `composite-laminate-fea`) is a Python suite for the linear static analysis of
 composite blade structures (wind and tidal turbine blades, helicopter blades and
 aircraft wings: sandwich and monolithic skins, spar caps and shear webs), built on
 general laminate mechanics from thin plates to thick laminates:
@@ -30,11 +33,14 @@ general laminate mechanics from thin plates to thick laminates:
 
 ```
 .
-├── setup.py
+├── pyproject.toml                          package metadata (name composite-laminate-fea, version from __init__)
+├── LICENSE                                 MIT
+├── CHANGELOG.md
+├── RELEASING.md                            how to cut a release (PyPI publishing is manual and off by default)
 ├── src/
-│   ├── run_solver_benchmarks.py            benchmark runner (laminate-benchmarks command)
 │   └── laminate_modelling_package/
-│       ├── __init__.py                     public API
+│       ├── __init__.py                     public API and __version__
+│       ├── run_solver_benchmarks.py        benchmark runner (laminate-benchmarks command)
 │       ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
 │       ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
 │       ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
@@ -69,13 +75,19 @@ general laminate mechanics from thin plates to thick laminates:
 
 ## Install
 
+The package is not on PyPI yet. Install it from a clone:
+
 ```bash
-pip install -e .            # NumPy only (dense solver)
-pip install -e ".[dev]"     # + SciPy sparse solver and pytest
+pip install -e .             # NumPy only (dense solver)
+pip install -e ".[sparse]"   # + SciPy sparse solver
 pip install -e ".[gmsh]"     # + Gmsh meshing
-pip install -e ".[examples]" # + matplotlib and Gmsh for the examples
-pytest                      # run the test suite
+pip install -e ".[examples]" # + SciPy, matplotlib and Gmsh for the examples
+pip install -e ".[dev]"      # everything above, plus pytest, build and twine
+pytest                       # run the test suite
 ```
+
+The import name is `laminate_modelling_package`; the distribution name is
+`composite-laminate-fea`.
 
 Python 3.9 or newer. SciPy is optional: without it the solver falls back to dense Cholesky.
 
@@ -158,8 +170,8 @@ props.stiffness, props.shear_centre, props.mass_per_length, props.bend_twist_cou
 
 `add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
 section loads from an aeroelastic code into the model, and measure section motion.
-See examples [20](examples/20_blade_beam_properties/),
-[21](examples/21_spar_cap_ply_drops/) and [23](examples/23_blade_segment/).
+See examples [20](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/20_blade_beam_properties/),
+[21](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/21_spar_cap_ply_drops/) and [23](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/23_blade_segment/).
 
 ## Ply books, solids and ParaView
 
@@ -186,7 +198,7 @@ write_vtu("out/blade", solution, TsaiWuCriterion(), layered=True)   # model and 
   `LayeredHex20Element` take a laminate through their thickness and give the full
   3D stress state. `merge_coincident_nodes` joins solid blocks and
   `couple_shell_to_solid` ties shell edges to solid faces. See
-  [example 22](examples/22_ply_drop_solid_detail/).
+  [example 22](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/22_ply_drop_solid_detail/).
 - **ParaView.** `write_vtu` writes the deformed model with displacements, stress
   resultants and failure indices, plus a second file with one cell per ply,
   offset through the thickness; `write_pvd` collects several load cases.
@@ -209,7 +221,7 @@ ex.to_csv("results/")
 
 For the bilinear element, moments and stresses are most accurate at element
 centroids (O(h²) convergence); nodal values are smoothed for plotting. See
-[example 03](examples/03_result_fidelity/).
+[example 03](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/03_result_fidelity/).
 
 The constitutive shell stresses have no σz, and FSDT's interlaminar shear jumps
 between plies. `EquilibriumStressRecoverer` integrates the 3D equilibrium
@@ -224,8 +236,8 @@ tau_yz, tau_xz, sigma_z = rec.transverse_stresses(element, 0.0, 0.0, z)
 worst = rec.critical_interface()     # DelaminationOnsetCriterion by default
 ```
 
-See [example 02](examples/02_through_thickness_stresses/) and
-[example 17](examples/17_pagano_benchmark/), which checks it against Pagano's
+See [example 02](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/02_through_thickness_stresses/) and
+[example 17](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/17_pagano_benchmark/), which checks it against Pagano's
 3D solution.
 
 ## Elements, orientation and loads
@@ -257,8 +269,8 @@ results = StructuralGlobalSolver().solve_combinations(
 - **Checks.** `ModelChecker().check(mesh, bcs)` reports distorted or warped
   elements, CLPT on thick plates, likely unit mix-ups and missing supports.
 
-See [example 18](examples/18_element_comparison/) and
-[example 19](examples/19_load_combinations/).
+See [example 18](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/18_element_comparison/) and
+[example 19](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/19_load_combinations/).
 
 ## Meshing with Gmsh
 
@@ -286,11 +298,11 @@ Gmsh options (`"quad8_curved"` by default, `"tri3"`, `"quad4"`, `"quad8"`, `"tri
 the importer is given `curved=False`; for Quad8 in
 your own models use `Mesh.ElementOrder = 2` with `Mesh.SecondOrderIncomplete = 1`. Gmsh is
 optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
-`libglu1-mesa`. See [example 08](examples/08_open_hole_gmsh/).
+`libglu1-mesa`. See [example 08](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/08_open_hole_gmsh/).
 
 ## Examples
 
-[`examples/`](examples/) holds twenty-six worked examples, each in its own folder
+[`examples/`](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/) holds twenty-six worked examples, each in its own folder
 with a script, its figures and a README that walks through the model. Examples
 01–19 cover the laminate mechanics underneath: the kinematic theories,
 through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
@@ -364,7 +376,10 @@ CalculiX supports one uniform hygrothermal state; Nastran also takes per-element
 
 ## Verification
 
-The test suite includes:
+Every example checks itself against a reference: closed-form or series
+solutions, exact 3D elasticity, classical laminate and thin-walled beam theory,
+CalculiX, PreComp and the published IEA 15 MW data (see the
+[examples index](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/)). The test suite includes:
 
 - Navier series solutions for simply supported cross-ply plates (CLPT and FSDT): the native solver is within 1% at a/h = 100 and a/h = 10, and each element type converges to them.
 - Pagano's exact 3D solution: RZT and layerwise centre deflections within 2–3% at a/h = 4 (FSDT is 11% stiff), and equilibrium-recovered interlaminar shear and σz within 3–4%.
@@ -375,7 +390,7 @@ The test suite includes:
 - Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
 - Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
-- The IEA 15 MW reference blade ([example 24](examples/24_iea15mw_section_properties/)): from its published layup, EA, EI, mass and the tension centre agree with PreComp on the same sections within 0.3% at six stations; the shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within about 1% in deflection, 2% in twist and 6% in spar-cap fibre stress.
+- The IEA 15 MW reference blade ([example 24](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/24_iea15mw_section_properties/)): from its published layup, EA, EI, mass and the tension centre agree with PreComp on the same sections within 0.3% at six stations; the shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within about 1% in deflection, 2% in twist and 6% in spar-cap fibre stress.
 
 ## Limitations
 
@@ -385,6 +400,10 @@ The test suite includes:
 - Flat facets (Quad4, flat Quad8) with laminates offset from the reference surface under-predict the torsional stiffness of thick-walled closed sections: GJ of a tube is about 7% low at t/R = 0.02, 22% low at 0.04 and 35% low at 0.06 with the skin on its outer surface, and refining the mesh does not help. Bending and axial stiffness are not affected. Curved Quad8 is within 2–3%. Blade roots and thick spar caps are where this matters; keep the default `quad8_curved` there, or mesh the skins on their mid-surface with `mesh_surface="mid"`, which brings every element to within 0.4% (examples 24 and 26).
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
-- `beam_section_properties` needs a prismatic segment (several chords long); a tapered blade is handled one station at a time.
+- `beam_section_properties` needs a prismatic segment long enough for the end restraint of warping to die out before the middle fifth, where it measures: about 8 chords for uncoupled layups and 12 for bend-twist-coupled caps (at 6 chords a ±20° cap layup reads EI flap 9% and the coupling 23% high). A tapered blade is handled one station at a time.
 - Equilibrium recovery assumes the hygrothermal state is constant within each element, and is least accurate right at supports and free edges, where it falls back on the element shear force.
 - Tri3 is markedly stiffer than Quad4 for the same mesh; use it to fill regions that cannot take quads.
+
+## License
+
+MIT; see [LICENSE](https://github.com/samhughes-fea/composite-laminate-fea/blob/main/LICENSE).
