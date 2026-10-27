@@ -254,6 +254,39 @@ Examples [27](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/
 [28](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/28_blade_torsion_hierarchy/) (three-cell blade section) check each layer
 against closed forms and the shell model.
 
+## Bending and axial load: shear, shear lag, distortion and end effects
+
+The same hierarchy applies to bending and extension. `TimoshenkoBeam` solves a beam
+from any 6 × 6 (or 4 × 4) section stiffness, and `GeneralizedBeam` adds the layers a
+beam stiffness cannot hold:
+
+```python
+from laminate_modelling_package import TimoshenkoBeam
+
+beam = TimoshenkoBeam(K6, length=10.0, n_elements=20)        # shear=False, or a 4 x 4: Euler-Bernoulli
+beam = TimoshenkoBeam.with_nodes_at(K6, 10.0, points=[4.0])  # element ends at supports and point loads
+sol = beam.clamp(0.0).pin(10.0).add_force(4.0, [0, -5e3, 0]).add_distributed([0, -2e3, 0]).solve()
+sol.node_displacement(4.0), sol.displacement(z), sol.section_forces(z), sol.strains(z), sol.reaction(0.0)
+```
+
+- **Euler-Bernoulli → Timoshenko.** Shear deflection is a few percent on a slender
+  blade and most of the answer on a short segment (half the tip deflection at
+  L/h = 6). Each element is exact for the section compliance it is given, so one
+  element per load or support point is enough for point and uniform loads, and the
+  response inside an element is recovered exactly. All couplings are kept.
+- **Shear lag** (`GeneralizedBeam`, warping modes). The axial stress across a wide
+  spar cap is not the plane-section straight line near a clamp or a load
+  introduction: it peaks at the webs and dips at mid-cap.
+- **Distortion** (distortional modes). A pressure on one skin bends that skin into the
+  section, which no beam stiffness can show. Ribs stop it.
+- **End effects** (`extensible=True`). Keeping the hoop strain and the full wall ABD
+  adds the Poisson restraint at a clamp and lets a point load diffuse sideways through
+  the walls, both of which die out within about one section width.
+
+Examples [30](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/30_box_spar_bending_axial/) (box spar) and
+[31](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/31_blade_bending_axial_hierarchy/) (blade section) check each layer
+against the shell model.
+
 ## Ply books, solids and ParaView
 
 ```python
@@ -383,7 +416,7 @@ optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
 
 ## Examples
 
-[`examples/`](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/) holds twenty-nine worked examples, each in its own folder
+[`examples/`](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/) holds thirty-one worked examples, each in its own folder
 with a script, its figures and a README that walks through the model. Examples
 01–19 cover the laminate mechanics underneath: the kinematic theories,
 through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
@@ -397,8 +430,12 @@ properties against PreComp and the published data, and a 20 m segment against
 CalculiX. Example 26 compares skins meshed on the mould line with offset laminates
 and on their mid-surface. Examples 27 and 28 take torsion beyond Saint-Venant on a
 box spar and a three-cell blade section: restrained warping and the bimoment, then
-GBT distortion and ribs, each checked against closed forms and the shell model. Run
-them all with `python examples/run_all.py`.
+GBT distortion and ribs, each checked against closed forms and the shell model. Example
+29 builds the Timoshenko 6 × 6 and Timoshenko-Vlasov 7 × 7 section stiffness from the
+shell and from thin-wall theory, against the published IEA 15 MW data. Examples 30 and
+31 do for bending and axial load what 27 and 28 do for torsion: shear deflection, shear
+lag, distortion under a skin pressure and end effects, on a box spar and a blade
+section. Run them all with `python examples/run_all.py`.
 
 ## Benchmark runner
 
