@@ -11,8 +11,10 @@ every ply with the 3D Hashin criterion, softens failed plies with
 * Ultimate failure follows when the 0-degree plies reach the fibre tensile
   strength.
 
-The classical laminate theory first-ply failure load is marked for comparison.
-Each re-solve is a linear static analysis with updated ply properties.
+The reference is a classical-laminate-theory ply-discount analysis with the same
+criterion and the same knockdown, worked on the laminate alone: find the load at
+which the next ply fails, degrade it, repeat until a fibre fails. Each FE re-solve
+is a linear static analysis with updated ply properties.
 """
 
 import sys
@@ -25,6 +27,7 @@ import numpy as np
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from laminate_modelling_package import (
     DOF,
+    DamageState,
     BoundaryConditions,
     FEAMesh,
     FSDTModel,
@@ -59,6 +62,46 @@ def clt_first_ply_failure(laminate):
     return ply.material.strength.Yt / (ply.T @ ply.Q_bar @ eps0)[1]
 
 
+def clt_ply_discount(laminate, criterion, degradation, n_max=20):
+    """Ply-discount analysis on the laminate alone under N_x.
+
+    Returns a list of (N_x at the event, axial compliance a11 after it, ply index,
+    damage labels). Each step finds the lowest N_x at which a ply gains a
+    new damage mode, degrades that ply and carries on until a fibre fails.
+    """
+    virgin, current = laminate, laminate
+    damage = {k: DamageState() for k in range(laminate.n_plies)}
+    events, n_prev = [], 0.0
+    for _ in range(n_max):
+        a = np.linalg.inv(integrate_abd(current)[:3, :3])
+        eps0 = a @ [1.0, 0.0, 0.0]
+        best = None
+        for k, ply in enumerate(current.plies):
+            s1, s2, t12 = ply.T @ ply.Q_bar @ eps0
+            unit = np.array([s1, s2, 0.0, 0.0, 0.0, t12])
+            strength = virgin.plies[k].material.strength
+            ratio = criterion.evaluate(unit, strength).strength_ratio
+            n_k = max(ratio, n_prev)
+            new = damage[k].merge(DamageState.from_failure(criterion.evaluate(unit * n_k * (1 + 1e-9), strength)))
+            if new != damage[k] and (best is None or n_k < best[0]):
+                best = (n_k, k, new)
+        if best is None:
+            break
+        n_prev, k, new = best
+        before = damage[k]
+        # the same knockdown hits every ply that fails at this load (the symmetric pair)
+        for j, ply in enumerate(current.plies):
+            if j == k or (ply.angle == current.plies[k].angle and damage[j] == before):
+                damage[j] = new
+                elastic = degradation.degrade(virgin.plies[j].material.elastic, new)
+                current = current.replace_ply(j, virgin.plies[j].with_material(
+                    virgin.plies[j].material.with_elastic(elastic, suffix="+dmg")))
+        events.append((n_prev, np.linalg.inv(integrate_abd(current)[:3, :3])[0, 0], k, new.labels()))
+        if new.fiber:
+            break
+    return events
+
+
 def main():
     card = create_default_library().get("T300/5208")
     lam = Laminate.from_angles(card, [0, 90, 90, 0], PLY_T)
@@ -66,7 +109,9 @@ def main():
     n_fpf = clt_first_ply_failure(lam)
     factors = np.round(np.arange(0.25, 8.01, 0.25), 4)
 
-    analysis = ProgressiveDamageAnalysis(criterion=HashinCriterion("3d"), degradation=SmearedCrackDegradation(0.01))
+    criterion, degradation = HashinCriterion("3d"), SmearedCrackDegradation(0.01)
+    clt = clt_ply_discount(lam, criterion, degradation)
+    analysis = ProgressiveDamageAnalysis(criterion=criterion, degradation=degradation)
     result = analysis.run(mesh, bcs, loads, load_factors=factors)
 
     nx = np.array([s.load_factor * REFERENCE_NX for s in result.steps]) / 1e3  # kN/m
@@ -78,6 +123,10 @@ def main():
     print(f"FE  first-ply failure  N_x = {result.first_ply_failure_factor * REFERENCE_NX / 1e3:.1f} kN/m")
     if fibre_step:
         print(f"FE  fibre failure      N_x = {fibre_step.load_factor * REFERENCE_NX / 1e3:.1f} kN/m")
+    h = lam.thickness
+    for n_ev, a11, k, labels in clt:
+        print(f"CLT ply discount: N_x = {n_ev / 1e3:6.1f} kN/m  ply {k} ({lam.plies[k].angle:.0f} deg) {', '.join(labels)}; "
+              f"axial modulus after {1 / (a11 * h) / 1e9:.1f} GPa")
     for s in result.steps:
         print(f"  N_x {s.load_factor * REFERENCE_NX / 1e3:7.1f} kN/m  max FI {s.max_failure_index:6.3f}  "
               f"damaged plies {s.total_damaged_plies:3d}  iterations {s.iterations}")
@@ -88,6 +137,20 @@ def main():
     initial_slope = nx[0] / strain[0]
     ax1.plot([0, strain[keep].max()], [0, initial_slope * strain[keep].max()], ls=(0, (4, 3)), lw=1.0,
              color=REFERENCE, label="undamaged stiffness")
+    # CLT ply-discount load path: at each event the strain jumps at constant load to
+    # the degraded laminate's secant (the knockdown is instant), then follows it
+    a_prev = np.linalg.inv(integrate_abd(lam)[:3, :3])[0, 0]
+    clt_n, clt_e = [0.0], [0.0]
+    for n_ev, a11, _, labels in clt:
+        fibre = any("fiber" in m for m in labels)  # the laminate fails: no post-failure branch drawn
+        clt_n += [n_ev] if fibre else [n_ev, n_ev]
+        clt_e += [n_ev * a_prev] if fibre else [n_ev * a_prev, n_ev * a11]
+        a_prev = a11
+    fe_secant = nx[(damaged > 0) & keep][0] * 1e3 / (strain[(damaged > 0) & keep][0] / 100)
+    print(f"Axial stiffness after matrix cracking: FE {fe_secant / lam.thickness / 1e9:.1f} GPa, "
+          f"CLT {1 / (clt[0][1] * lam.thickness) / 1e9:.1f} GPa")
+    ax1.plot(np.array(clt_e) * 100, np.array(clt_n) / 1e3, color=REFERENCE, lw=1.4, marker="s", ms=4, mfc="none",
+             label="CLT ply discount")
     ax1.axhline(n_fpf / 1e3, color=TEXT_SECONDARY, lw=0.8, ls=(0, (1, 2)))
     ax1.text(0.0, n_fpf / 1e3, f" CLT first-ply failure {n_fpf / 1e3:.0f} kN/m", va="bottom", fontsize=8, color=TEXT_SECONDARY)
     if fibre_step:

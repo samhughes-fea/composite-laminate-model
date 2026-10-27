@@ -24,7 +24,7 @@ approach, without a separate submodel.
 python examples/22_ply_drop_solid_detail/ply_drop_solid_detail.py
 ```
 
-It runs in a few seconds: 552 elements, about 20 000 DOFs.
+The main model has 552 elements and about 20 000 DOFs; with the mesh study the script takes about a minute.
 
 ## Walkthrough
 
@@ -58,21 +58,51 @@ It runs in a few seconds: 552 elements, about 20 000 DOFs.
    the full 3D stress at any point, here along the interface under the dropped plies
    and through the thickness. τxz is `stress_global[4]`, σz `stress_global[2]`.
 
+## Checks
+
+| Check | Model | Hand calculation |
+|---|---|---|
+| Mean σx 9 mm behind the drop (10 plies) | 80.03 MPa | 100 × 8/10 = 80.00 MPa |
+| Mean σx 9 mm ahead of the drop (8 plies) | 100.06 MPa | 100.00 MPa |
+| Interface shear integrated from the solid's end to the drop | 102.6 kN/m | axial force in the dropped plies there: 99.5 kN/m |
+
+The last line is equilibrium of the two dropped plies: their end is free, so
+every newton they carry at the start of the solid detail must cross the
+interface below them before the drop. The 3% gap is the shear read on the
+element face, where a displacement-based solid is least accurate. The dropped
+plies carry 99.5 kN/m there rather than the 160 kN/m of a uniformly stressed cap,
+because the mid-plane steps down at the drop and the gripped cap bends.
+
 ## Reading the figure
 
-- **Left:** along the interface under the dropped plies, shear and peel are close to
-  zero 10 mm from the drop and climb steeply over the last 2 mm. The two dropped
-  plies hand their load to the plies below through this short zone. The script
-  prints peaks of about −68 MPa shear and 92 MPa peel for 100 MPa in the thin cap.
-  A square-ended ply on a sharp corner is a stress singularity, so these peaks grow
-  as the mesh is refined. Judge the drop by the stress a short distance away (a
-  point or average stress criterion), not the corner value.
-- **Middle:** 1 mm behind the drop the shear is concentrated at the interface under
-  the dropped plies (about −19 MPa there). 8 mm behind it the profile is the
-  smooth one a shell with equilibrium recovery would give.
-- **Right:** the shear field around the ply end. The dropped plies (top left) shed
-  their load into the cap within a few ply thicknesses of the end. The shell model
-  has no interlaminar stress at all here.
+- **First panel:** along the interface under the dropped plies, shear and peel
+  are small 10 mm from the drop and climb steeply over the last 2 mm. The two
+  dropped plies hand their load to the plies below through this short zone:
+  their force falls from 77 kN/m 5 mm behind the drop to 36 kN/m 1 mm behind it.
+  The script prints peaks of −68 MPa shear and 92 MPa peel for 100 MPa in the
+  thin cap.
+- **Second panel:** 1 mm behind the drop the shear is concentrated at the
+  interface under the dropped plies (about −19 MPa there). 8 mm behind it the
+  profile is the smooth one a shell with equilibrium recovery would give.
+- **Third panel:** the shear field around the ply end. The dropped plies (top
+  left) shed their load into the cap within a few ply thicknesses of the end.
+  The shell model has no interlaminar stress at all here.
+- **Fourth panel: the mesh study.** A square-ended ply on a sharp corner is a
+  stress singularity, so the corner value has no converged answer:
+
+  | Smallest element | τxz at the corner | 0.5 mm away | 1 mm away | Peel at the corner |
+  |---|---|---|---|---|
+  | 0.25 mm | −54 MPa | −29.7 MPa | −22.7 MPa | 58 MPa |
+  | 0.063 mm (the main model) | −70 MPa | −31.2 MPa | −22.7 MPa | 95 MPa |
+  | 0.016 mm | −143 MPa | −30.7 MPa | −22.7 MPa | 208 MPa |
+  | 0.004 mm | −313 MPa | −30.5 MPa | −22.6 MPa | 650 MPa |
+
+  The corner value grows without bound as the mesh is refined, while the shear
+  0.5 mm and 1 mm from the drop settles within 2% on the first mesh. Judge a
+  drop by the stress a short distance away (a point or average stress
+  criterion, with the distance calibrated to tests), not the corner value. At
+  31 MPa, 0.5 mm away, this drop is within the 40–70 MPa interlaminar shear
+  strength of glass/epoxy at 100 MPa cap stress.
 
 ## Things to try
 
@@ -80,5 +110,3 @@ It runs in a few seconds: 552 elements, about 20 000 DOFs.
   `solid_block` with a resin `MaterialCard`) and watch the peel fall.
 - Drop one ply instead of two (`N_DROP = 1`), or stop the plies in the middle of the
   stack instead of the outside.
-- Refine the grading (`graded(28, ...)`) and see the corner peak climb while the
-  stress 0.5 mm away settles.

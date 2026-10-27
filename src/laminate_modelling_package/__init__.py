@@ -198,7 +198,7 @@ from .laminate_thin_wall import ThinWalledSection, Wall, condensed_wall_stiffnes
 from .laminate_torsion import RestrainedTorsionBeam, TorsionResponse
 from .laminate_gbt import GBTSolution, GeneralizedBeam, SectionModes
 
-__version__ = "1.0.0"
+__version__ = "0.1.0"
 
 import types as _types
 

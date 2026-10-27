@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "composite-laminate-fea"
+dynamic = ["version"]
+description = "Linear static analysis of composite blade structures: laminate mechanics, layered shell and solid FEA, failure criteria, ply knockdown damage and CalculiX/Nastran kernels."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sam Hughes" }]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22"]
+keywords = [
+    "composites", "laminate", "finite element", "FEA", "shell", "wind turbine blade",
+    "classical laminate theory", "failure criteria", "CalculiX", "Nastran",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.optional-dependencies]
+sparse = ["scipy>=1.8"]
+gmsh = ["gmsh>=4.11"]
+examples = ["scipy>=1.8", "matplotlib>=3.5", "gmsh>=4.11"]
+dev = ["scipy>=1.8", "pytest>=7", "gmsh>=4.11", "matplotlib>=3.5", "build>=1.0", "twine>=5"]
+
+[project.urls]
+Homepage = "https://github.com/samhughes-fea/composite-laminate-fea"
+Source = "https://github.com/samhughes-fea/composite-laminate-fea"
+Issues = "https://github.com/samhughes-fea/composite-laminate-fea/issues"
+Changelog = "https://github.com/samhughes-fea/composite-laminate-fea/blob/main/CHANGELOG.md"
+
+[project.scripts]
+laminate-benchmarks = "laminate_modelling_package.run_solver_benchmarks:cli"
+
+[tool.setuptools.dynamic]
+version = { attr = "laminate_modelling_package.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -38,17 +38,24 @@ noise):
 
 | Mesh | DOF | Assembly [s] | Native sparse [s] | Native dense [s] | CalculiX [s] |
 |---|---|---|---|---|---|
-| 8² | 486 | 0.09 | 0.11 | 0.12 | 0.18 |
-| 24² | 3,750 | 0.59 | 0.91 | 2.91 | 1.35 |
-| 48² | 14,406 | 2.44 | 4.47 | – | 7.43 |
+| 8² | 486 | 0.16 | 0.19 | 0.18 | 0.12 |
+| 24² | 3,750 | 1.39 | 1.41 | 2.98 | 1.06 |
+| 48² | 14,406 | 4.87 | 7.57 | – | 4.67 |
 
+The native times are the whole solve (assembly, constraints, factorisation and
+back-substitution), each on a freshly built mesh so no cached element data is
+reused; the assembly column times the stiffness assembly alone.
+
+- **Assembly is most of the native time.** Up to about 4,000 DOFs the sparse
+  solve adds almost nothing to it; at 14,000 DOFs assembly is still two thirds of
+  the total. The element stiffness loop runs in Python, so vectorising it, or
+  caching identical element matrices on a regular mesh, is the obvious speed-up
+  if large models become routine.
 - **The sparse native solver scales almost linearly** with the number of DOFs
   over this range. The dense solver grows much faster and needs memory that
   grows with the square of the DOF count, so it is only for small models or
   machines without SciPy.
-- **CalculiX is slower here** because its time includes writing the deck,
-  starting `ccx` and parsing the text output, and because its S8R mesh has about
-  three times as many nodes as the Quad4 mesh.
-- **Assembly is about half the native time.** The element stiffness loop runs in
-  Python. Vectorising it, or caching identical element matrices on a regular
-  mesh, is the obvious speed-up if large models become routine.
+- **CalculiX is about as fast as the native solver here**, and faster on the
+  largest mesh, even though its time includes writing the deck, starting `ccx`,
+  parsing the text output, and an S8R mesh with about three times as many nodes.
+  Its element loop is compiled Fortran.

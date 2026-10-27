@@ -1,7 +1,7 @@
 """Gmsh meshing: import Gmsh meshes into ``FEAMesh`` and build plate geometries.
 
 Gmsh (https://gmsh.info) is an optional dependency, installed with
-``pip install laminate_modelling_package[gmsh]``. It is imported only when one of
+``pip install composite-laminate-fea[gmsh]``. It is imported only when one of
 these classes is used.
 
 Physical groups carry the model data:
@@ -69,7 +69,7 @@ def _gmsh():
         import gmsh  # noqa: WPS433 - optional dependency, imported on use
     except (ImportError, OSError) as exc:  # OSError: the shared library failed to load
         raise GmshUnavailableError(
-            "Gmsh meshing needs the gmsh package: pip install 'laminate_modelling_package[gmsh]'. "
+            "Gmsh meshing needs the gmsh package: pip install 'composite-laminate-fea[gmsh]'. "
             f"Import failed with: {exc}"
         ) from exc
     return gmsh
