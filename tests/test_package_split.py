@@ -151,7 +151,9 @@ def test_public_api_split():
     shim = importlib.import_module(SHIM)
     geometry, laminate, section = (importlib.import_module(p) for p in (GEOMETRY, LAMINATE, SECTION))
     assert set(section.__all__).isdisjoint(laminate.__all__)
-    assert set(geometry.__all__) <= set(laminate.__all__)  # BladeBuilder's inputs, re-exported
-    for name in geometry.__all__:
+    builder_inputs = {"Airfoil", "Station", "SkinRegion", "ShearWeb"}  # re-exported by the laminate model
+    assert builder_inputs <= set(geometry.__all__) & set(laminate.__all__)
+    for name in builder_inputs:
         assert getattr(laminate, name) is getattr(geometry, name)
+    assert set(laminate.__all__).isdisjoint(set(geometry.__all__) - builder_inputs)
     assert set(shim.__all__) == set(laminate.__all__) | set(section.__all__)

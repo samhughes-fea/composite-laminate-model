@@ -113,7 +113,7 @@ only on the ones before it:
 
 | Package | Holds | May import |
 | --- | --- | --- |
-| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, and the implicit section geometry forked from blade-structure (`section_geometry`: signed-distance solids, 40 structural layouts, wall midlines and cell-wall loops) | numpy, shapely, numba |
+| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, `BladeGeometry` (`section_at(z)`: the section's wall midlines, thicknesses and cells at any span position), and the implicit section geometry forked from blade-structure (`section_geometry`: signed-distance solids, 40 structural layouts, wall midlines and cell-wall loops) | numpy, shapely, numba |
 | `composite_laminate_model` | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry |
 | `anisotropic_section_model` | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam` | the geometry, and `Laminate` and `integrate_abd` |
 
