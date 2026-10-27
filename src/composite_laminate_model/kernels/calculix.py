@@ -79,7 +79,7 @@ class CalculiXDeckWriter:
                 mids.append(midside[key])
             connectivity[_CCX_TYPE[topo]][element.element_id] = list(n) + mids
 
-        lines: List[str] = [f"** {model.title} - written by laminate_modelling_package", "*HEADING", model.title]
+        lines: List[str] = [f"** {model.title} - written by composite_laminate_model", "*HEADING", model.title]
         lines.append("*NODE, NSET=NALL")
         lines += [f"{nid}, {xyz[0]:.12g}, {xyz[1]:.12g}, {xyz[2]:.12g}" for nid, xyz in coords.items()]
         for ccx_type, conn in connectivity.items():

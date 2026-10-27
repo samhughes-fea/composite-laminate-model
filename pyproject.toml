@@ -43,10 +43,10 @@ Issues = "https://github.com/samhughes-fea/composite-laminate-fea/issues"
 Changelog = "https://github.com/samhughes-fea/composite-laminate-fea/blob/main/CHANGELOG.md"
 
 [project.scripts]
-laminate-benchmarks = "laminate_modelling_package.run_solver_benchmarks:cli"
+laminate-benchmarks = "composite_laminate_model.run_solver_benchmarks:cli"
 
 [tool.setuptools.dynamic]
-version = { attr = "laminate_modelling_package.__version__" }
+version = { attr = "composite_laminate_model.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

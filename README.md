@@ -3,7 +3,7 @@
 [![tests](https://github.com/samhughes-fea/composite-laminate-fea/actions/workflows/tests.yml/badge.svg)](https://github.com/samhughes-fea/composite-laminate-fea/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/samhughes-fea/composite-laminate-fea/blob/main/LICENSE)
 
-`laminate_modelling_package` (distributed as `composite-laminate-fea`) is a Python suite for the linear static analysis of
+`composite-laminate-fea` is a Python suite for the linear static analysis of
 composite blade structures (wind and tidal turbine blades, helicopter blades and
 aircraft wings: sandwich and monolithic skins, spar caps and shear webs), built on
 general laminate mechanics from thin plates to thick laminates:
@@ -45,41 +45,48 @@ general laminate mechanics from thin plates to thick laminates:
 ├── CHANGELOG.md
 ├── RELEASING.md                            how to cut a release (PyPI publishing is manual and off by default)
 ├── src/
-│   └── laminate_modelling_package/
-│       ├── __init__.py                     public API and __version__
-│       ├── run_solver_benchmarks.py        benchmark runner (laminate-benchmarks command)
-│       ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
-│       ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
-│       ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
-│       ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
-│       ├── laminate_temperature.py         TemperatureDependentMaterial
-│       ├── laminate_kinematics.py          CLPT, FSDT, RZT, layerwise; generalised section matrices
-│       ├── laminate_elements.py            ShellElement, Tri3 / Quad4 / Quad8 shells, ElementRegistry
-│       ├── laminate_curved_shell.py        curved Quad8 / Tri6 shells (normals from the surface)
-│       ├── laminate_solid.py               layered Hex8 / Hex20 solids, solid_block, shell-solid coupling
-│       ├── laminate_blade.py               Airfoil, Station, BladeBuilder, beam_section_properties
-│       ├── laminate_thin_wall.py           ThinWalledSection: Saint-Venant shear flows, GJ, warping function, EΓ
-│       ├── laminate_torsion.py             RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
-│       ├── laminate_gbt.py                 GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
-│       ├── laminate_connectors.py          reference nodes, rigid_link (RBE2), distributing_link (RBE3)
-│       ├── laminate_layup.py               PlyDefinition, Layup: ply books, ply drops, per-ply results
-│       ├── laminate_orientation.py         FixedDirection, CylindricalDirection, FieldDirection
-│       ├── laminate_fea_engine.py          compatibility imports for the two modules above
-│       ├── laminate_stress_recovery.py     StressRecoverer, ExactStressRecoverer
-│       ├── laminate_equilibrium.py         EquilibriumStressRecoverer (σz, interlaminar shear, delamination)
-│       ├── laminate_elasticity_3d.py       PaganoPlate: exact 3D cross-ply solution
-│       ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu, Hashin, delamination; registry
-│       ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
-│       ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, LoadCombination, solver
-│       ├── laminate_mesh_builders.py       RectangularPlateBuilder, CylindricalPanelBuilder
-│       ├── laminate_gmsh.py                GmshMeshImporter, GmshPlateBuilder (optional Gmsh meshing)
-│       ├── laminate_model_check.py         ModelChecker: quality, slenderness, units, supports
-│       ├── kernels/                        FEAKernel + Native / CalculiX / Nastran adapters and deck writers
-│       ├── laminate_kernels.py             compatibility imports for kernels/
-│       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
-│       ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
-│       └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
-├── examples/                               twenty-eight worked examples with figures (see examples/README.md)
+│   ├── blade_geometry_model/               geometry only: no materials, no meshes
+│   │   ├── __init__.py                     public API and __version__
+│   │   └── blade_geometry.py               Airfoil (NACA 4-digit, ellipse, coordinates), Station, SkinRegion, ShearWeb
+│   ├── composite_laminate_model/           laminate mechanics and shell / solid FEA
+│   │   ├── __init__.py                     public API and __version__ (pyproject reads it)
+│   │   ├── run_solver_benchmarks.py        benchmark runner (laminate-benchmarks command)
+│   │   ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
+│   │   ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
+│   │   ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
+│   │   ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
+│   │   ├── laminate_temperature.py         TemperatureDependentMaterial
+│   │   ├── laminate_kinematics.py          CLPT, FSDT, RZT, layerwise; generalised section matrices
+│   │   ├── laminate_elements.py            ShellElement, Tri3 / Quad4 / Quad8 shells, ElementRegistry
+│   │   ├── laminate_curved_shell.py        curved Quad8 / Tri6 shells (normals from the surface)
+│   │   ├── laminate_solid.py               layered Hex8 / Hex20 solids, solid_block, shell-solid coupling
+│   │   ├── laminate_blade.py               BladeBuilder, BladeMesh, beam_section_properties (shell-derived)
+│   │   ├── laminate_connectors.py          reference nodes, rigid_link (RBE2), distributing_link (RBE3)
+│   │   ├── laminate_layup.py               PlyDefinition, Layup: ply books, ply drops, per-ply results
+│   │   ├── laminate_orientation.py         FixedDirection, CylindricalDirection, FieldDirection
+│   │   ├── laminate_fea_engine.py          compatibility imports for the two modules above
+│   │   ├── laminate_stress_recovery.py     StressRecoverer, ExactStressRecoverer
+│   │   ├── laminate_equilibrium.py         EquilibriumStressRecoverer (σz, interlaminar shear, delamination)
+│   │   ├── laminate_elasticity_3d.py       PaganoPlate: exact 3D cross-ply solution
+│   │   ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu, Hashin, delamination; registry
+│   │   ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
+│   │   ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, LoadCombination, solver
+│   │   ├── laminate_mesh_builders.py       RectangularPlateBuilder, CylindricalPanelBuilder
+│   │   ├── laminate_gmsh.py                GmshMeshImporter, GmshPlateBuilder (optional Gmsh meshing)
+│   │   ├── laminate_model_check.py         ModelChecker: quality, slenderness, units, supports
+│   │   ├── kernels/                        FEAKernel + Native / CalculiX / Nastran adapters and deck writers
+│   │   ├── laminate_kernels.py             compatibility imports for kernels/
+│   │   ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
+│   │   ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
+│   │   └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
+│   ├── anisotropic_section_model/          beam section theory for thin-walled anisotropic sections
+│   │   ├── __init__.py                     public API and __version__
+│   │   ├── thin_wall.py                    ThinWalledSection: Saint-Venant shear flows, GJ, warping function, EΓ, 6 × 6 / 7 × 7
+│   │   ├── torsion.py                      RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
+│   │   ├── gbt.py                          GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
+│   │   └── beam.py                         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
+│   └── laminate_modelling_package/         the old import name: re-exports all three, kept for one release
+├── examples/                               thirty-one worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -96,15 +103,27 @@ pip install -e ".[dev]"      # everything above, plus pytest, build and twine
 pytest                       # run the test suite
 ```
 
-The import name is `laminate_modelling_package`; the distribution name is
-`composite-laminate-fea`.
+The distribution `composite-laminate-fea` installs three packages, each depending
+only on the ones before it:
+
+| Package | Holds | May import |
+| --- | --- | --- |
+| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb` | numpy (scipy optional) |
+| `composite_laminate_model` | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry |
+| `anisotropic_section_model` | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam` | the geometry, and `Laminate` and `integrate_abd` |
+
+Shell physics and beam-section physics stay apart: the section package never extracts
+properties from a shell model, and the laminate model never imports the section
+package. `tests/test_package_split.py` enforces this. The old import name,
+`laminate_modelling_package`, still works and re-exports everything; it will be
+removed after the first release.
 
 Python 3.9 or newer. SciPy is optional: without it the solver falls back to dense Cholesky.
 
 ## Quick start
 
 ```python
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF, BoundaryConditions, ExactStressRecoverer, FEAMesh, FSDTModel,
     HashinCriterion, HygrothermalState, Laminate, LoadCase,
     StructuralGlobalSolver, create_default_library,
@@ -140,7 +159,7 @@ given by region name, with `_ss` / `_ps` suffixes where the suction and pressure
 sides differ:
 
 ```python
-from laminate_modelling_package import (
+from composite_laminate_model import (
     Airfoil, BladeBuilder, FSDTModel, ShearWeb, SkinRegion, Station, beam_section_properties)
 
 stations = [Station(0.0, 1.2, Airfoil.naca4("0024"), pitch_axis=0.35),
@@ -212,7 +231,7 @@ tools follow the torsional response beyond it, each adding one physical
 contribution:
 
 ```python
-from laminate_modelling_package import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
+from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
 
 section = ThinWalledSection.from_blade_mesh(blade, z=5.0)       # or from_segments(...)
 section.GJ, section.shear_flow, section.omega, section.shear_centre, section.EGamma
@@ -261,7 +280,7 @@ from any 6 × 6 (or 4 × 4) section stiffness, and `GeneralizedBeam` adds the la
 beam stiffness cannot hold:
 
 ```python
-from laminate_modelling_package import TimoshenkoBeam
+from anisotropic_section_model import TimoshenkoBeam
 
 beam = TimoshenkoBeam(K6, length=10.0, n_elements=20)        # shear=False, or a 4 x 4: Euler-Bernoulli
 beam = TimoshenkoBeam.with_nodes_at(K6, 10.0, points=[4.0])  # element ends at supports and point loads
@@ -290,7 +309,7 @@ against the shell model.
 ## Ply books, solids and ParaView
 
 ```python
-from laminate_modelling_package import Layup, PlyDefinition, solid_block, couple_shell_to_solid, write_vtu
+from composite_laminate_model import Layup, PlyDefinition, solid_block, couple_shell_to_solid, write_vtu
 
 plies = [PlyDefinition("cap_12", glass, 1.0e-3, 0.0, elements="spar_cap", region=lambda x: x[2] < 4.0), ...]
 layup = Layup(plies, reference="top")
@@ -322,7 +341,7 @@ write_vtu("out/blade", solution, TsaiWuCriterion(), layered=True)   # model and 
 `ResultsExtractor` turns a solution into arrays at each level of fidelity:
 
 ```python
-from laminate_modelling_package import ResultsExtractor, TsaiWuCriterion
+from composite_laminate_model import ResultsExtractor, TsaiWuCriterion
 
 ex = ResultsExtractor(result, load_case=loads, criterion=TsaiWuCriterion())
 ex.gauss_points()   # strains and N, M, Q at the 2x2 Gauss points
@@ -343,7 +362,7 @@ equations through the thickness for any theory, and checks every ply interface
 for delamination onset:
 
 ```python
-from laminate_modelling_package import EquilibriumStressRecoverer
+from composite_laminate_model import EquilibriumStressRecoverer
 
 rec = EquilibriumStressRecoverer(result, loads)
 tau_yz, tau_xz, sigma_z = rec.transverse_stresses(element, 0.0, 0.0, z)
@@ -357,7 +376,7 @@ See [example 02](https://github.com/samhughes-fea/composite-laminate-fea/tree/ma
 ## Elements, orientation and loads
 
 ```python
-from laminate_modelling_package import BladeBuilder, LoadCombination, RectangularPlateBuilder
+from composite_laminate_model import BladeBuilder, LoadCombination, RectangularPlateBuilder
 
 mesh = RectangularPlateBuilder(0.4, 0.2, 20, 10, element="quad8").build(laminate, RefinedZigZagModel())
 blade = BladeBuilder(stations, regions, webs, material_axis=(0.0, 0.0, 1.0))   # 0° along the span (default)
@@ -394,7 +413,7 @@ choose the laminate of each region, and every physical group becomes a named
 node set for supports and loads:
 
 ```python
-from laminate_modelling_package import CircularHole, GmshMeshImporter, GmshPlateBuilder
+from composite_laminate_model import CircularHole, GmshMeshImporter, GmshPlateBuilder
 
 importer = GmshMeshImporter({"skin": skin, "doubler": doubler}, FSDTModel())
 gm = importer.from_file("panel.geo")        # or .step / .brep (meshed in quads), or a .msh

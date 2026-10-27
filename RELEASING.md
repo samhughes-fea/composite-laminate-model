@@ -4,8 +4,10 @@ Nothing is published to PyPI automatically. A release is three deliberate steps.
 
 ## 1. Prepare
 
-1. Set the version in `src/laminate_modelling_package/__init__.py`
-   (`__version__`); `pyproject.toml` reads it from there.
+1. Set `__version__` in `src/composite_laminate_model/__init__.py`;
+   `pyproject.toml` reads it from there. Set the same version in
+   `src/blade_geometry_model/__init__.py` and `src/anisotropic_section_model/__init__.py`
+   (a test fails if the three differ).
 2. Move the `Unreleased` notes in `CHANGELOG.md` under the new version and date.
 3. Check locally:
 

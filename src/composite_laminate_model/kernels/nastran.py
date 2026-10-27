@@ -159,7 +159,7 @@ class NastranDeckWriter:
         has_pressure = any(loads.has_pressure(e) for e in mesh.element_ids)
         has_loads = bool(forces) or has_pressure
 
-        lines = ["$ " + model.title + " - written by laminate_modelling_package", "SOL 101", "CEND",
+        lines = ["$ " + model.title + " - written by composite_laminate_model", "SOL 101", "CEND",
                  f"TITLE = {model.title}", "ECHO = NONE", "SUBCASE 1", f"  SPC = {self.SPC_ID}"]
         if bcs.constraints:
             lines.append(f"  MPC = {self.MPC_ID}")
