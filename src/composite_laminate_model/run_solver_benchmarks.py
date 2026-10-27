@@ -20,7 +20,7 @@ from typing import Dict, List, Sequence
 
 import numpy as np
 
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF,
     AnalysisModel,
     BoundaryConditions,

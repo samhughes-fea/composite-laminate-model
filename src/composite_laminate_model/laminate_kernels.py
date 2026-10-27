@@ -1,4 +1,4 @@
-"""Compatibility facade for ``laminate_modelling_package.kernels``.
+"""Compatibility facade for ``composite_laminate_model.kernels``.
 
 The kernels now live in a subpackage with one module per backend; this module
 re-exports them so existing imports keep working.

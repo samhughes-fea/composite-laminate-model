@@ -35,7 +35,7 @@ jobs:
       - name: Check the tag matches the package version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          version=$(python -c "import re, pathlib; print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/laminate_modelling_package/__init__.py').read_text()).group(1))")
+          version=$(python -c "import re, pathlib; print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/composite_laminate_model/__init__.py').read_text()).group(1))")
           if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
             echo "Tag ${GITHUB_REF_NAME} does not match package version ${version}"; exit 1
           fi
@@ -43,7 +43,7 @@ jobs:
         run: |
           python -m venv /tmp/wheel-env
           /tmp/wheel-env/bin/pip install dist/*.whl
-          cd /tmp && /tmp/wheel-env/bin/python -c "import laminate_modelling_package as lmp; print(lmp.__version__, len(lmp.__all__), 'public names')"
+          cd /tmp && /tmp/wheel-env/bin/python -c "import blade_geometry_model, composite_laminate_model, anisotropic_section_model, laminate_modelling_package as lmp; print(lmp.__version__, len(lmp.__all__), 'public names')"
           /tmp/wheel-env/bin/laminate-benchmarks --n 4 --work-dir /tmp/bench
       - uses: actions/upload-artifact@v4
         with:

@@ -6,6 +6,20 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The code is split into three packages, each depending only on the ones before it:
+  `blade_geometry_model` (`Airfoil`, `Station`, `SkinRegion`, `ShearWeb`),
+  `composite_laminate_model` (laminate mechanics, shell and solid FE, solver,
+  kernels, `BladeBuilder`, `beam_section_properties`) and
+  `anisotropic_section_model` (`ThinWalledSection`, `RestrainedTorsionBeam`,
+  `GeneralizedBeam`, `TimoshenkoBeam`). The section modules drop their `laminate_`
+  prefix (`laminate_gbt` is now `anisotropic_section_model.gbt`, and so on).
+- `laminate_modelling_package` still imports and re-exports the same public names,
+  and its old submodules are aliases of the new ones. It will be removed after the
+  first release.
+- `tests/test_package_split.py` checks every import against those boundaries.
+
 ## [0.1.0] - not yet released
 
 First release of `composite-laminate-fea` (import name `laminate_modelling_package`).
