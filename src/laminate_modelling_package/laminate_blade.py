@@ -760,6 +760,12 @@ def beam_section_properties(
     directly; tip shear forces then locate the shear centre. The blade should be
     prismatic over ``z_range`` (a long, uniform segment, five chords or more, gives the
     cleanest values). ``reference`` is the (x, y) point the properties refer to.
+
+    The clamped root and rigid tip restrain warping, and the section is free to distort
+    in between, so GJ here includes the distortion that this restraint drives over the
+    segment and reads a few percent below the Saint-Venant value on short segments.
+    ``ThinWalledSection.from_blade_mesh(blade).GJ`` gives the free-warping Saint-Venant
+    GJ of the same section (see examples 27 and 28).
     """
     from .laminate_connectors import add_reference_node, distributing_link, rigid_link
     from .laminate_solver_pipeline import BoundaryConditions, LoadCase, StructuralGlobalSolver
