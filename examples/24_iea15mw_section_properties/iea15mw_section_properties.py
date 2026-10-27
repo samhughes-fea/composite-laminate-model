@@ -9,14 +9,16 @@ stiffness and mass data of the turbine model. ``data/prepare_reference_data.py``
 regenerates it with WISDEM.
 
 Each station is built as a prismatic shell segment, eight chords long, with
-``BladeBuilder`` (skins on the outer mould line with the laminate growing inward,
-webs node-to-node between the skins), and ``beam_section_properties`` extracts its
-beam properties. The comparison is like for like: same airfoil points, same sector
-boundaries, same laminae, same material constants.
+``BladeBuilder`` (laminates growing inward from the outer mould line, meshed on
+their mid-surface, webs node-to-node between the skins), and
+``beam_section_properties`` extracts its beam properties. The comparison is like for
+like: same airfoil points, same sector boundaries, same laminae, same material
+constants.
 
-The sections are meshed with curved Quad8 shells. Flat shells (Quad4, flat Quad8)
-with skins offset to the outer mould line lose torsional stiffness in thick-walled
-closed sections; the last figure measures that on a thick tube and on the blade.
+The sections are meshed with curved Quad8 shells, and again with Quad4. Flat shells
+(Quad4, flat Quad8) with skins left on the outer mould line and offset lose
+torsional stiffness in thick-walled closed sections, which is why the mid-surface is
+the default; the last figure measures that on a thick tube and on the blade.
 
 Figures: the six sections with their centres; the properties along the span against
 PreComp and the published data; and the torsion check.
@@ -119,9 +121,10 @@ def published_summary(st):
             "tc": (pa + b_t / c, a_t / c), "sc": (pa + b_s / c, a_s / c)}
 
 
-def thick_tube_gj(t_over_r, element, reference, radius=1.0):
+def thick_tube_gj(t_over_r, element, mesh_surface, radius=1.0):
     """GJ of a thick isotropic tube (outer radius ``radius``) over the exact value G 2 pi R^3 t
-    (R the mid-wall radius), for a shell model with its skin on the outer or mid surface."""
+    (R the mid-wall radius), for a shell model meshed on the outer surface (skin offset
+    inward) or on the skin's mid-surface."""
     steel = {"E1": 2.0e11, "E2": 2.0e11, "G12": 2.0e11 / 2.6, "nu12": 0.3, "rho": 7850.0}
     card = material_cards({"steel": steel})["steel"]
     t = t_over_r * radius
@@ -129,9 +132,9 @@ def thick_tube_gj(t_over_r, element, reference, radius=1.0):
     stations = [Station(0.0, 2 * radius, tube, pitch_axis=0.5), Station(8 * radius, 2 * radius, tube, pitch_axis=0.5)]
     n = 12 if element != "quad4" else 24
     blade = BladeBuilder(stations, [SkinRegion("upper", 0.0, 0.5, n), SkinRegion("lower", 0.5, 1.0, n)], n_span=16,
-                         element=element, skin_reference=reference).build(Laminate([Ply(card, t, 0.0)]), FSDTModel())
+                         element=element, mesh_surface=mesh_surface).build(Laminate([Ply(card, t, 0.0)]), FSDTModel())
     props = beam_section_properties(blade)
-    r_mid = radius - 0.5 * t if reference == "outer" else radius
+    r_mid = radius - 0.5 * t
     return (1.0 / np.linalg.inv(props.stiffness)[3, 3]) / (steel["G12"] * 2 * np.pi * r_mid**3 * t)
 
 
@@ -217,12 +220,12 @@ def figure_properties(rows):
 def figure_torsion(tube, rows):
     fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(12.0, 4.2))
     t = np.array(TUBE_T_OVER_R)
-    for (element, reference), colour, marker, label in (
-            (("quad4", "mid"), SERIES[2], "^", "Quad4, skin on its mid-surface"),
-            (("quad4", "outer"), SERIES[1], "s", "Quad4, skin offset to the outer surface"),
-            (("quad8", "outer"), SERIES[3], "D", "flat Quad8, offset"),
-            (("quad8_curved", "outer"), SERIES[0], "o", "curved Quad8, offset")):
-        ax0.plot(t, tube[(element, reference)], marker + "-", color=colour, label=label)
+    for (element, surface), colour, marker, label in (
+            (("quad4", "mid"), SERIES[2], "^", "Quad4 on the mid-surface (default)"),
+            (("quad4", "outer"), SERIES[1], "s", "Quad4 on the outer surface, skin offset"),
+            (("quad8", "outer"), SERIES[3], "D", "flat Quad8, outer, offset"),
+            (("quad8_curved", "outer"), SERIES[0], "o", "curved Quad8, outer, offset")):
+        ax0.plot(t, tube[(element, surface)], marker + "-", color=colour, label=label)
     ax0.axhline(1.0, color=REFERENCE, lw=0.8)
     ax0.set_xlabel("wall thickness / radius")
     ax0.set_ylabel("GJ / exact")

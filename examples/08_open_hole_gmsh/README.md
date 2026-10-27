@@ -13,7 +13,7 @@ concentration of four laminates with Lekhnitskii's orthotropic solution.
 |---|---|
 | Laminates | [0]8, [0/90]2s, [0/45/-45/90]s and [±45]2s, T300/5208, 0.125 mm plies |
 | Plate | 300 × 150 mm with a central 10 mm hole (W/d = 15) |
-| Mesh | Gmsh Quad4 (Kt comes from nodal averages, which suit linear elements): 12 mm far away, 0.3 mm on the hole edge, graded over 6 hole radii (about 3,000 elements) |
+| Mesh | Gmsh curved Quad8 (the default element): 12 mm far away, 0.3 mm on the hole edge, graded over 6 hole radii (about 3,000 elements) |
 | Supports | left edge held in x, one node held in y, out-of-plane DOFs held |
 | Load | uniform line load N_x = 100 kN/m on the right edge |
 | Model | FSDT |
@@ -33,7 +33,7 @@ python examples/08_open_hole_gmsh/open_hole_gmsh.py
 
    ```python
    builder = GmshPlateBuilder(0.3, 0.15, [CircularHole(0.15, 0.075, 0.005)],
-                              size=0.012, hole_size=0.0003, transition=6, element="quad4")
+                              size=0.012, hole_size=0.0003, transition=6)
    gm = builder.build(GmshMeshImporter(laminate, FSDTModel()))
    gm.mesh            # an ordinary FEAMesh
    gm.nodes("left")   # named node sets: left, right, bottom, top, hole_1, plate
@@ -68,10 +68,10 @@ gm.nodes("clamped_edge")               # node ids in any physical group
 
 | Laminate | Kt (FE) | Kt (Lekhnitskii) | Difference |
 |---|---|---|---|
-| [0]8 | 6.44 | 6.78 | -5.0% |
-| [0/90]2s | 4.82 | 4.94 | -2.4% |
+| [0]8 | 6.37 | 6.78 | −6.1% |
+| [0/90]2s | 4.81 | 4.94 | −2.6% |
 | [0/45/-45/90]s | 3.01 | 3.01 | 0.0% |
-| [±45]2s | 2.04 | 2.03 | +0.3% |
+| [±45]2s | 2.04 | 2.03 | +0.5% |
 
 - **Left:** the graded Gmsh mesh with element N_x for the quasi-isotropic
   laminate. The load flows around the hole and peaks at its top and bottom.
@@ -80,7 +80,9 @@ gm.nodes("clamped_edge")               # node ids in any physical group
   [±45]2s has its maximum slightly inside the plate rather than at the edge, as
   the Konish-Whitney curve also shows. Konish-Whitney is itself an
   approximation and is least accurate for [0]8.
-- **Right:** FE matches Lekhnitskii within 5%. The two highly orthotropic stacks
-  read low because the peak is very narrow and nodal averaging smooths it. With
-  a 0.6 mm hole-edge size the [0]8 error was 10%, so it falls as the mesh is
-  refined.
+- **Right:** FE matches Lekhnitskii within 3% for three of the four stacks. The
+  [0]8 stack reads 6% low: its peak is the narrowest (middle panel), and
+  nodal averaging over the elements at the edge smooths it.
+  The error falls as the hole-edge elements shrink. With Quad4 elements on the
+  same mesh, [0]8 reads 11% low and [0/90]2s 5% low, which is why this example
+  uses the default quadratic element (example 18 compares all five).
