@@ -91,7 +91,7 @@ general laminate mechanics from thin plates to thick laminates:
 │   │   ├── gbt.py                          GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
 │   │   └── beam.py                         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
 │   └── laminate_modelling_package/         the old import name: re-exports all three, kept for one release
-├── examples/                               thirty-one worked examples with figures (see examples/README.md)
+├── examples/                               thirty-two worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
@@ -113,7 +113,7 @@ only on the ones before it:
 
 | Package | Holds | May import |
 | --- | --- | --- |
-| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, `BladeGeometry` (`section_at(z)`: the section's wall midlines, thicknesses and cells at any span position), and the implicit section geometry forked from blade-structure (`section_geometry`: signed-distance solids, 40 structural layouts, wall midlines and cell-wall loops) | numpy, shapely, numba |
+| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, `BladeGeometry` (`section_at(z)`: the section's wall midlines, thicknesses and cells at any span position; mesh it with `BladeBuilder.from_geometry`), and the implicit section geometry forked from blade-structure (`section_geometry`: signed-distance solids, 40 structural layouts, wall midlines and cell-wall loops) | numpy, shapely, numba |
 | `composite_laminate_model` | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry |
 | `anisotropic_section_model` | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam` | the geometry, and `Laminate` and `integrate_abd` |
 
@@ -228,6 +228,29 @@ and with the published IEA 15 MW 6 × 6.
 section loads from an aeroelastic code into the model, and measure section motion.
 See examples [20](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/20_blade_beam_properties/),
 [21](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/21_spar_cap_ply_drops/) and [23](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/23_blade_segment/).
+
+### From the implicit section geometry
+
+`blade_geometry_model.BladeGeometry` lofts one of the section geometry's 40 layouts
+(skins, spar caps, any number of webs, cap bands and boxes) between the same
+`Station`s, with wall thicknesses that may vary along the span and webs at chord
+fractions or at fixed distances from the leading edge. `section_at(z)` cuts it
+anywhere. The same cut gives the thin-walled section
+(`ThinWalledSection.from_geometry`) and, along the span, a shell model:
+
+```python
+from blade_geometry_model import BladeGeometry
+
+geo = BladeGeometry(stations, "2D-F", skin_thickness=0.003, spar_cap_thickness=0.008,
+                    shear_web_thickness=0.002, web_positions=(0.18, 0.48))
+blade = BladeBuilder.from_geometry(geo, n_span=12).build({"skin": skin, "cap": cap, "web": web}, FSDTModel())
+```
+
+The shells lie on the walls' mid-surfaces, and spar caps are merged into the skin they
+are bonded to. On example 20's section this matches the region-based model to within
+1% in EA, EI and GJ ([example 32](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/32_blade_from_implicit_geometry/)).
+The geometry has one skin thickness per section, so sandwich panels that differ from
+region to region still need the region-based builder.
 
 ## Torsion: Saint-Venant, restrained warping and distortion
 
