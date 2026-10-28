@@ -12,3 +12,4 @@ dist/
 examples/**/calculix_run/
 examples/**/vtk/
 spooles.out
+src/blade_geometry_model/**/visualisation/output/
