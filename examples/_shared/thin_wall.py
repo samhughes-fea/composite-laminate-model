@@ -18,7 +18,7 @@ prismatic segment, which makes it the natural check on ``beam_section_properties
 
 import numpy as np
 
-from laminate_modelling_package import integrate_abd
+from composite_laminate_model import integrate_abd
 
 
 def thin_wall_stiffness(airfoil, chord, pitch_axis, regions, webs, laminates, n=600):

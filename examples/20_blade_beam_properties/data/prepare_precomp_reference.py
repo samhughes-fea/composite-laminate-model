@@ -27,7 +27,7 @@ sys.path.insert(0, str(HERE.parents[2] / "src"))
 sys.path.insert(0, str(HERE.parent))
 
 from blade_beam_properties import ANGLES, CHORD, REGIONS, WEBS  # noqa: E402
-from laminate_modelling_package import create_default_library  # noqa: E402
+from composite_laminate_model import create_default_library  # noqa: E402
 
 OUT = HERE / "precomp_reference.json"
 PLY_T = 0.5e-3

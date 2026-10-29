@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from conftest import navier_clpt_centre, navier_fsdt_centre, simply_supported
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF,
     BoundaryConditions,
     CLPTModel,

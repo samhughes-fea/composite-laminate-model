@@ -15,7 +15,7 @@ Lay-up          Layup, PlyDefinition, PlyDrop, ReferenceDirection, AngleField, T
 Orientation     FixedDirection, CylindricalDirection, FieldDirection
 Solution        FEAMesh, BoundaryConditions, LoadCase, LoadCombination, StructuralGlobalSolver
 Meshing         BladeBuilder (airfoil skins, spar caps, shear webs, from the
-                blade_geometry_model types Airfoil, Station, SkinRegion and ShearWeb, which
+                implicit_geometry_kernel types Airfoil, Station, SkinRegion and ShearWeb, which
                 are re-exported here), RectangularPlateBuilder, CylindricalPanelBuilder,
                 GmshPlateBuilder, GmshMeshImporter (optional gmsh dependency)
 Connections     add_reference_node, rigid_link (RBE2), distributing_link (RBE3)

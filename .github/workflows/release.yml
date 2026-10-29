@@ -42,8 +42,10 @@ jobs:
       - name: Smoke-test the wheel in a clean environment
         run: |
           python -m venv /tmp/wheel-env
+          # the geometry kernel is not on PyPI yet: install it from its repository first
+          /tmp/wheel-env/bin/pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel"
           /tmp/wheel-env/bin/pip install dist/*.whl
-          cd /tmp && /tmp/wheel-env/bin/python -c "import blade_geometry_model, composite_laminate_model, anisotropic_section_model, laminate_modelling_package as lmp; print(lmp.__version__, len(lmp.__all__), 'public names')"
+          cd /tmp && /tmp/wheel-env/bin/python -c "import composite_laminate_model as clm; print(clm.__version__, len(clm.__all__), 'public names')"
           /tmp/wheel-env/bin/laminate-benchmarks --n 4 --work-dir /tmp/bench
       - uses: actions/upload-artifact@v4
         with:
@@ -72,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/composite-laminate-fea
+      url: https://pypi.org/p/composite-laminate-model
     permissions:
       id-token: write
     steps:

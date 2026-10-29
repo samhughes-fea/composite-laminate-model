@@ -3,9 +3,11 @@
 Worked examples that exercise the package end to end, from a single plate
 solve to blade structures. Examples 01–19 cover the laminate mechanics underneath;
 20–26 are blade sections, spar caps and blade segments, with 24 to 26 validating
-them on the IEA 15 MW reference blade; 27 and 28 take torsion beyond Saint-Venant,
-to restrained warping and cross-section distortion, and 29 takes the section stiffness
-to the Timoshenko 6 × 6 and the Timoshenko-Vlasov 7 × 7. Each one lives in its own folder with
+them on the IEA 15 MW reference blade. The beam-section examples (torsion beyond
+Saint-Venant, Timoshenko and Vlasov section stiffness, bending and axial hierarchies, and
+sections cut from the implicit geometry) are in
+[anisotropic-section-model](https://github.com/samhughes-fea/anisotropic-section-model/tree/main/examples).
+Each one lives in its own folder with
 its script, the figures it produces and a README that walks through the model
 and how to read the results.
 
@@ -42,12 +44,6 @@ and how to read the results.
 | 24 | [IEA 15 MW section properties](24_iea15mw_section_properties/) | The published reference blade at six stations against PreComp and the published data; why skins are meshed on their mid-surface (torsion of offset skins on flat shells) | `BladeBuilder`, `beam_section_properties` |
 | 25 | [CalculiX on a blade segment](25_blade_calculix_crosscheck/) | A 20 m IEA 15 MW segment under operating loads: deflection, twist and ply stresses against CalculiX S8R | `CalculiXKernelAdapter`, `AnalysisModel` |
 | 26 | [Mid-surface meshing](26_mid_surface_meshing/) | Skins on the mould line with offsets or on their mid-surface: thick-tube torsion and six IEA 15 MW stations, for Quad4, flat and curved Quad8 | `BladeBuilder(mesh_surface=...)`, `BladeMesh.to_mid_surface` |
-| 27 | [Box spar torsion](27_box_spar_torsion/) | Saint-Venant, Vlasov, Benscoter and GBT on a clamped composite box against closed forms and a shell model: twist, bimoment, warping stress, distortion under a web force couple, ribs | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam` |
-| 28 | [Blade torsion hierarchy](28_blade_torsion_hierarchy/) | A three-cell blade section: Saint-Venant shear flows and GJ, the restrained-warping bimoment at the root, and GBT distortion under torque from skin loads, each against the shell | `ThinWalledSection.from_blade_mesh`, `GeneralizedBeam`, `SectionModes` |
-| 29 | [Timoshenko and Vlasov section stiffness](29_timoshenko_vlasov_stiffness/) | The 6 × 6 (shear) and 7 × 7 (warping) section stiffness from thin-wall theory and from the shell: a composite box spar, shear deflection of short cantilevers, restrained twist, and six IEA 15 MW stations against the published 6 × 6 | `beam_section_properties(warping=True)`, `ThinWalledSection.timoshenko_stiffness`, `transform_beam_stiffness` |
-| 30 | [Box spar bending and axial load](30_box_spar_bending_axial/) | Beyond Euler-Bernoulli on a composite box: shear deflection at L/h = 6, shear lag in the caps, distortion under a cap pressure, and the diffusion and Poisson end effects of an axial load | `TimoshenkoBeam`, `GeneralizedBeam(extensible=True)`, `ThinWalledSection.timoshenko_stiffness` |
-| 31 | [Blade bending and axial hierarchy](31_blade_bending_axial_hierarchy/) | The same hierarchy on a three-cell blade section: flapwise tip force, shear lag across the spar caps at the root, skin suction and ribs, and an axial load fed into the caps alone | `TimoshenkoBeam`, `GeneralizedBeam`, `beam_section_properties` |
-| 32 | [Blade from its implicit geometry](32_blade_from_implicit_geometry/) | Any of the 40 section layouts lofted along a blade, cut anywhere and meshed; the thin-walled section and the shell model from the same cut, against example 20's region-based model; a tapered, twisted segment; flapwise webs under twist | `BladeGeometry.section_at`, `ThinWalledSection.from_geometry`, `BladeBuilder.from_geometry` |
 
 All examples are linear static analyses, and each one compares its results with a
 reference: a closed-form or series solution, exact 3D elasticity, laminate or

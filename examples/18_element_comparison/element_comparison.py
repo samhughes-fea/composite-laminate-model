@@ -8,7 +8,7 @@ finite-width correction).
 Left: the three meshes at the second refinement, zoomed on the hole. Right: Kt
 error against the number of degrees of freedom.
 
-Needs Gmsh: pip install "composite-laminate-fea[gmsh]".
+Needs Gmsh: pip install "composite-laminate-model[gmsh]".
 """
 
 import sys
@@ -22,7 +22,7 @@ from matplotlib.collections import PolyCollection
 
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from open_hole_gmsh import L, PLY_T, R, W, lekhnitskii
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF,
     BoundaryConditions,
     CircularHole,

@@ -1,4 +1,4 @@
-"""Shell models of a blade meshed from its implicit geometry (``blade_geometry_model``).
+"""Shell models of a blade meshed from its implicit geometry (``implicit_geometry_kernel``).
 
 ``GeometryBladeBuilder`` (made by ``BladeBuilder.from_geometry``) cuts a
 ``BladeGeometry`` at every node section along the span and meshes the walls'
@@ -111,7 +111,7 @@ class GeometryBladeBuilder:
     Parameters
     ----------
     geometry:
-        A ``blade_geometry_model.BladeGeometry``.
+        A ``implicit_geometry_kernel.BladeGeometry``.
     n_span:
         Elements along the span (an int), or increasing span fractions 0..1.
     element:

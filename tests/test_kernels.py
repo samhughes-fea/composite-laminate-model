@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from conftest import simply_supported
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF,
     AnalysisModel,
     CalculiXDeckWriter,
@@ -182,7 +182,7 @@ def test_calculix_deck_promotes_to_s8r(model, tmp_path):
 
 
 def _clamped_blade_with_gravity(cfrp):
-    from laminate_modelling_package import Airfoil, BladeBuilder, BoundaryConditions, SkinRegion, Station
+    from composite_laminate_model import Airfoil, BladeBuilder, BoundaryConditions, SkinRegion, Station
 
     af = Airfoil.naca4("0018")
     skin = Laminate.from_angles(cfrp, [45, -45, 0, 0, -45, 45], 1.0e-3)

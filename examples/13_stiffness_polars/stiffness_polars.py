@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 
 from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
-from laminate_modelling_package import Laminate, create_default_library, integrate_abd
+from composite_laminate_model import Laminate, create_default_library, integrate_abd
 
 PLY_T = 0.125e-3
 STACKS = {

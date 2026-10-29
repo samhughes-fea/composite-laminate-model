@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DamageState,
     ElasticProperties3D,
     FailureMode,

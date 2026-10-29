@@ -11,7 +11,7 @@ The finite-width correction Kt = Kt_inf * (2 + (1 - d/W)^3) / (3 (1 - d/W)) is
 applied, and the stress decay away from the hole is compared with the
 Konish-Whitney approximation.
 
-Needs Gmsh: pip install "composite-laminate-fea[gmsh]".
+Needs Gmsh: pip install "composite-laminate-model[gmsh]".
 """
 
 import sys
@@ -23,7 +23,7 @@ import numpy as np
 from matplotlib.collections import PolyCollection
 
 from _shared.plotting import REFERENCE, SEQUENTIAL, SERIES, TEXT_SECONDARY, plt, save
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF,
     BoundaryConditions,
     CircularHole,

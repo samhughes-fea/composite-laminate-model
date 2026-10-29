@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from blade_geometry_model.blade_geometry import Airfoil, ShearWeb, SkinRegion, Station
+from implicit_geometry_kernel.blade_geometry import Airfoil, ShearWeb, SkinRegion, Station
 
 from .laminate_kinematics import KinematicModel
 from .laminate_mechanics import Laminate
@@ -209,7 +209,7 @@ class BladeBuilder:
     def from_geometry(geometry, n_span: Union[int, Sequence[float]] = 10, element: str = "quad8_curved",
                       element_size: Optional[float] = None, wall_elements: Optional[Dict[str, int]] = None,
                       material_axis=(0.0, 0.0, 1.0)) -> "GeometryBladeBuilder":  # noqa: F821
-        """Mesh a ``blade_geometry_model.BladeGeometry`` instead of explicit regions and webs.
+        """Mesh a ``implicit_geometry_kernel.BladeGeometry`` instead of explicit regions and webs.
 
         See ``GeometryBladeBuilder``: the shells lie on the walls' mid-surfaces cut from
         the geometry along the span, with spar caps merged into their skins.

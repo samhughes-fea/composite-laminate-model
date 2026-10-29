@@ -22,7 +22,7 @@ import numpy as np
 
 from _shared.membrane import MembraneCell
 from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
-from laminate_modelling_package import Laminate, TsaiWuCriterion, create_default_library
+from composite_laminate_model import Laminate, TsaiWuCriterion, create_default_library
 
 PLY_T = 0.125e-3
 ANGLES = np.arange(0, 91, 5)

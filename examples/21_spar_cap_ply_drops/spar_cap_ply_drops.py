@@ -31,7 +31,7 @@ import numpy as np
 
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.thin_wall import thin_wall_stiffness
-from laminate_modelling_package import (
+from composite_laminate_model import (
     Airfoil,
     BladeBuilder,
     BoundaryConditions,

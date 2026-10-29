@@ -28,7 +28,7 @@ import numpy as np
 
 from _shared.analytical import elasticity_3d_uniform
 from _shared.plotting import MODEL_COLOURS, REFERENCE, TEXT_SECONDARY, plt, save, simply_supported
-from laminate_modelling_package import (
+from composite_laminate_model import (
     AnalysisModel,
     CalculiXKernelAdapter,
     CLPTModel,
@@ -43,7 +43,7 @@ from laminate_modelling_package import (
     StructuralGlobalSolver,
     create_default_library,
 )
-from laminate_modelling_package.laminate_mechanics import shear_transformation
+from composite_laminate_model.laminate_mechanics import shear_transformation
 
 A, RATIO, Q, N_ELEM = 0.1, 5, 1.0e5, 16
 

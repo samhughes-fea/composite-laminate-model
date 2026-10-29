@@ -8,7 +8,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from laminate_modelling_package import (  # noqa: E402
+from composite_laminate_model import (  # noqa: E402
     DOF,
     BoundaryConditions,
     EnrichedDOF,

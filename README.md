@@ -1,9 +1,9 @@
-# composite-laminate-fea
+# composite-laminate-model
 
-[![tests](https://github.com/samhughes-fea/composite-laminate-fea/actions/workflows/tests.yml/badge.svg)](https://github.com/samhughes-fea/composite-laminate-fea/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/samhughes-fea/composite-laminate-fea/blob/main/LICENSE)
+[![tests](https://github.com/samhughes-fea/composite-laminate-model/actions/workflows/tests.yml/badge.svg)](https://github.com/samhughes-fea/composite-laminate-model/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/samhughes-fea/composite-laminate-model/blob/main/LICENSE)
 
-`composite-laminate-fea` is a Python suite for the linear static analysis of
+`composite-laminate-model` is a Python package for the linear static analysis of
 composite blade structures (wind and tidal turbine blades, helicopter blades and
 aircraft wings: sandwich and monolithic skins, spar caps and shear webs), built on
 general laminate mechanics from thin plates to thick laminates:
@@ -13,11 +13,9 @@ general laminate mechanics from thin plates to thick laminates:
   model: the Timoshenko 6 × 6 stiffness with all its couplings (and the classical
   4 × 4 inside it), the Timoshenko-Vlasov 7 × 7 with the warping DOF, and the shear,
   tension and mass centres
-- torsion beyond Saint-Venant: thin-walled section properties (multi-cell shear flows,
-  warping function, shear centre, EΓ, and the 6 × 6 and 7 × 7 stiffness from thin-wall
-  theory), restrained-warping beams with the bimoment
-  (Vlasov, Benscoter), and Generalised Beam Theory with the section's distortional modes
-  and ribs
+- shell meshes straight from the implicit section geometry of
+  [implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel)
+  (`BladeBuilder.from_geometry`): any of its 40 section layouts, lofted along the span
 - ply books: laminates defined ply by ply over element sets, with ply drops and
   per-ply results
 - 3D orthotropic materials, plies and laminates, with temperature-dependent properties
@@ -40,66 +38,55 @@ general laminate mechanics from thin plates to thick laminates:
 
 ```
 .
-├── pyproject.toml                          package metadata (name composite-laminate-fea, version from __init__)
+├── pyproject.toml                          package metadata (name composite-laminate-model, version from __init__)
 ├── LICENSE                                 MIT
 ├── CHANGELOG.md
 ├── RELEASING.md                            how to cut a release (PyPI publishing is manual and off by default)
 ├── src/
-│   ├── blade_geometry_model/               geometry only: no materials, no meshes
-│   │   ├── __init__.py                     public API and __version__
-│   │   ├── blade_geometry.py               Airfoil (NACA 4-digit, ellipse, coordinates), Station, SkinRegion, ShearWeb
-│   │   ├── section_geometry/               implicit (SDF / CSG) section geometry, forked from blade-structure
-│   │   ├── section_contract/               ShellMidlineStrip, CellWallLoop and the other hand-off types
-│   │   ├── coordinate_frames/              section and shell frame conventions and transforms
-│   │   ├── area_2d/, shoelace_integration/ area integration (quadtree and shoelace)
-│   │   └── FORK.md                         fork point, and the files left in blade-structure
-│   ├── composite_laminate_model/           laminate mechanics and shell / solid FEA
-│   │   ├── __init__.py                     public API and __version__ (pyproject reads it)
-│   │   ├── run_solver_benchmarks.py        benchmark runner (laminate-benchmarks command)
-│   │   ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
-│   │   ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
-│   │   ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
-│   │   ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
-│   │   ├── laminate_temperature.py         TemperatureDependentMaterial
-│   │   ├── laminate_kinematics.py          CLPT, FSDT, RZT, layerwise; generalised section matrices
-│   │   ├── laminate_elements.py            ShellElement, Tri3 / Quad4 / Quad8 shells, ElementRegistry
-│   │   ├── laminate_curved_shell.py        curved Quad8 / Tri6 shells (normals from the surface)
-│   │   ├── laminate_solid.py               layered Hex8 / Hex20 solids, solid_block, shell-solid coupling
-│   │   ├── laminate_blade.py               BladeBuilder, BladeMesh, beam_section_properties (shell-derived)
-│   │   ├── laminate_connectors.py          reference nodes, rigid_link (RBE2), distributing_link (RBE3)
-│   │   ├── laminate_layup.py               PlyDefinition, Layup: ply books, ply drops, per-ply results
-│   │   ├── laminate_orientation.py         FixedDirection, CylindricalDirection, FieldDirection
-│   │   ├── laminate_fea_engine.py          compatibility imports for the two modules above
-│   │   ├── laminate_stress_recovery.py     StressRecoverer, ExactStressRecoverer
-│   │   ├── laminate_equilibrium.py         EquilibriumStressRecoverer (σz, interlaminar shear, delamination)
-│   │   ├── laminate_elasticity_3d.py       PaganoPlate: exact 3D cross-ply solution
-│   │   ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu, Hashin, delamination; registry
-│   │   ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
-│   │   ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, LoadCombination, solver
-│   │   ├── laminate_mesh_builders.py       RectangularPlateBuilder, CylindricalPanelBuilder
-│   │   ├── laminate_gmsh.py                GmshMeshImporter, GmshPlateBuilder (optional Gmsh meshing)
-│   │   ├── laminate_model_check.py         ModelChecker: quality, slenderness, units, supports
-│   │   ├── kernels/                        FEAKernel + Native / CalculiX / Nastran adapters and deck writers
-│   │   ├── laminate_kernels.py             compatibility imports for kernels/
-│   │   ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
-│   │   ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
-│   │   └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
-│   ├── anisotropic_section_model/          beam section theory for thin-walled anisotropic sections
-│   │   ├── __init__.py                     public API and __version__
-│   │   ├── thin_wall.py                    ThinWalledSection: Saint-Venant shear flows, GJ, warping function, EΓ, 6 × 6 / 7 × 7
-│   │   ├── torsion.py                      RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
-│   │   ├── gbt.py                          GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
-│   │   └── beam.py                         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
-│   └── laminate_modelling_package/         the old import name: re-exports all three, kept for one release
-├── examples/                               thirty-two worked examples with figures (see examples/README.md)
+│   └── composite_laminate_model/           laminate mechanics and shell / solid FEA
+│       ├── __init__.py                     public API and __version__ (pyproject reads it)
+│       ├── run_solver_benchmarks.py        benchmark runner (laminate-benchmarks command)
+│       ├── laminate_materials_3d.py        ElasticProperties3D, StrengthProperties3D, 3D Bond rotations
+│       ├── laminate_materials.py           MaterialCard, MaterialRepository / MaterialLibrary
+│       ├── laminate_hygrothermal.py        HygrothermalProperties/State, HygrothermalEngine (N_ht, M_ht)
+│       ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
+│       ├── laminate_temperature.py         TemperatureDependentMaterial
+│       ├── laminate_kinematics.py          CLPT, FSDT, RZT, layerwise; generalised section matrices
+│       ├── laminate_elements.py            ShellElement, Tri3 / Quad4 / Quad8 shells, ElementRegistry
+│       ├── laminate_curved_shell.py        curved Quad8 / Tri6 shells (normals from the surface)
+│       ├── laminate_solid.py               layered Hex8 / Hex20 solids, solid_block, shell-solid coupling
+│       ├── laminate_blade.py               BladeBuilder, BladeMesh, beam_section_properties (shell-derived)
+│       ├── laminate_blade_geometry.py      BladeBuilder.from_geometry: shells meshed from the implicit geometry
+│       ├── laminate_connectors.py          reference nodes, rigid_link (RBE2), distributing_link (RBE3)
+│       ├── laminate_layup.py               PlyDefinition, Layup: ply books, ply drops, per-ply results
+│       ├── laminate_orientation.py         FixedDirection, CylindricalDirection, FieldDirection
+│       ├── laminate_fea_engine.py          compatibility imports for the two modules above
+│       ├── laminate_stress_recovery.py     StressRecoverer, ExactStressRecoverer
+│       ├── laminate_equilibrium.py         EquilibriumStressRecoverer (σz, interlaminar shear, delamination)
+│       ├── laminate_elasticity_3d.py       PaganoPlate: exact 3D cross-ply solution
+│       ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu, Hashin, delamination; registry
+│       ├── laminate_progressive_damage.py  SmearedCrackDegradation, ProgressiveDamageAnalysis
+│       ├── laminate_solver_pipeline.py     FEAMesh, BoundaryConditions, LoadCase, LoadCombination, solver
+│       ├── laminate_mesh_builders.py       RectangularPlateBuilder, CylindricalPanelBuilder
+│       ├── laminate_gmsh.py                GmshMeshImporter, GmshPlateBuilder (optional Gmsh meshing)
+│       ├── laminate_model_check.py         ModelChecker: quality, slenderness, units, supports
+│       ├── kernels/                        FEAKernel + Native / CalculiX / Nastran adapters and deck writers
+│       ├── laminate_kernels.py             compatibility imports for kernels/
+│       ├── laminate_benchmark_stress.py    StressDistributionVerifier, ThicknessProfile
+│       ├── laminate_results.py             ResultsExtractor: Gauss point, ply, element, node and global results
+│       └── laminate_vtk.py                 write_vtu / write_pvd: ParaView files, one cell per ply
+├── examples/                               twenty-six worked examples with figures (see examples/README.md)
 └── tests/                                  pytest suite
 ```
 
 ## Install
 
-The package is not on PyPI yet. Install it from a clone:
+The package is not on PyPI yet. It depends on
+[implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel),
+so install that first, then this package from a clone:
 
 ```bash
+pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel"
 pip install -e .             # NumPy only (dense solver)
 pip install -e ".[sparse]"   # + SciPy sparse solver
 pip install -e ".[gmsh]"     # + Gmsh meshing
@@ -108,22 +95,23 @@ pip install -e ".[dev]"      # everything above, plus pytest, build and twine
 pytest                       # run the test suite
 ```
 
-The distribution `composite-laminate-fea` installs three packages, each depending
-only on the ones before it:
+Python 3.11 or newer. NumPy is required, and the geometry kernel brings Shapely and
+Numba. SciPy is optional: without it the solver falls back to dense Cholesky.
 
-| Package | Holds | May import |
+### Related packages
+
+| Package | Holds | Depends on |
 | --- | --- | --- |
-| `blade_geometry_model` | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, `BladeGeometry` (`section_at(z)`: the section's wall midlines, thicknesses and cells at any span position; mesh it with `BladeBuilder.from_geometry`), and the implicit section geometry forked from blade-structure (`section_geometry`: signed-distance solids, 40 structural layouts, wall midlines and cell-wall loops) | numpy, shapely, numba |
-| `composite_laminate_model` | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry |
-| `anisotropic_section_model` | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam` | the geometry, and `Laminate` and `integrate_abd` |
+| [implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel) | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, `BladeGeometry` and the implicit section geometry: 40 structural layouts, wall midlines and cells at any span position | numpy, shapely, numba |
+| **composite-laminate-model** (this one) | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry kernel |
+| [anisotropic-section-model](https://github.com/samhughes-fea/anisotropic-section-model) | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam`: thin-walled beam-section theory | `Laminate` and `integrate_abd` from this package |
 
-Shell physics and beam-section physics stay apart: the section package never extracts
-properties from a shell model, and the laminate model never imports the section
-package. `tests/test_package_split.py` enforces this. The old import name,
-`laminate_modelling_package`, still works and re-exports everything; it will be
-removed after the first release.
-
-Python 3.11 or newer. NumPy, Shapely and Numba are required (the geometry's signed-distance kernels use Numba). SciPy is optional: without it the solver falls back to dense Cholesky.
+Shell physics and beam-section physics stay apart: this package never imports the
+section model (`tests/test_import_boundary.py` checks it), and the section model never
+extracts properties from a shell model. They meet in the section model's tests and
+examples. `Airfoil`, `Station`, `SkinRegion` and `ShearWeb` are re-exported here from
+the geometry kernel. The suite's old import name, `laminate_modelling_package`, is gone:
+import from `composite_laminate_model` instead.
 
 ## Quick start
 
@@ -193,11 +181,12 @@ deformation the one before leaves out:
 The 6 × 6 is in the BeamDyn / windIO order, about the reference point, with
 γx = u_x′ − θy and γy = u_y′ + θx. The 4 × 4 is the 6 × 6 with the shear forces free,
 so it is what an Euler-Bernoulli code wants. `transform_beam_stiffness(K, offset,
-angle)` moves a 6 × 6 to another point or turns its axes. `ThinWalledSection` gives
-the same matrices from thin-wall theory (`timoshenko_stiffness`,
-`vlasov_stiffness`), from no shell model at all. The two share no code, and
-[example 29](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/29_timoshenko_vlasov_stiffness/) compares them with each other
-and with the published IEA 15 MW 6 × 6.
+angle)` moves a 6 × 6 to another point or turns its axes.
+[anisotropic-section-model](https://github.com/samhughes-fea/anisotropic-section-model)'s
+`ThinWalledSection` gives the same matrices from thin-wall theory, from no shell model
+at all. The two share no code, and its
+[example 03](https://github.com/samhughes-fea/anisotropic-section-model/tree/main/examples/03_timoshenko_vlasov_stiffness/)
+compares them with each other and with the published IEA 15 MW 6 × 6.
 
 - **Geometry.** z is the span, x the chord (leading to trailing edge) and y the
   thickness, with the pitch axis at x = 0. `Airfoil.naca4(code)`, `Airfoil.ellipse(t)`
@@ -226,20 +215,19 @@ and with the published IEA 15 MW 6 × 6.
 
 `add_reference_node`, `rigid_link` (RBE2) and `distributing_link` (RBE3) bring
 section loads from an aeroelastic code into the model, and measure section motion.
-See examples [20](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/20_blade_beam_properties/),
-[21](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/21_spar_cap_ply_drops/) and [23](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/23_blade_segment/).
+See examples [20](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/20_blade_beam_properties/),
+[21](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/21_spar_cap_ply_drops/) and [23](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/23_blade_segment/).
 
 ### From the implicit section geometry
 
-`blade_geometry_model.BladeGeometry` lofts one of the section geometry's 40 layouts
+`implicit_geometry_kernel.BladeGeometry` lofts one of the section geometry's 40 layouts
 (skins, spar caps, any number of webs, cap bands and boxes) between the same
 `Station`s, with wall thicknesses that may vary along the span and webs at chord
 fractions or at fixed distances from the leading edge. `section_at(z)` cuts it
-anywhere. The same cut gives the thin-walled section
-(`ThinWalledSection.from_geometry`) and, along the span, a shell model:
+anywhere, and `BladeBuilder.from_geometry` meshes the walls along the span:
 
 ```python
-from blade_geometry_model import BladeGeometry
+from implicit_geometry_kernel import BladeGeometry
 
 geo = BladeGeometry(stations, "2D-F", skin_thickness=0.003, spar_cap_thickness=0.008,
                     shear_web_thickness=0.002, web_positions=(0.18, 0.48))
@@ -248,91 +236,20 @@ blade = BladeBuilder.from_geometry(geo, n_span=12).build({"skin": skin, "cap": c
 
 The shells lie on the walls' mid-surfaces, and spar caps are merged into the skin they
 are bonded to. On example 20's section this matches the region-based model to within
-1% in EA, EI and GJ ([example 32](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/32_blade_from_implicit_geometry/)).
+1% in EA, EI and GJ (the section model's
+[example 06](https://github.com/samhughes-fea/anisotropic-section-model/tree/main/examples/06_blade_from_implicit_geometry/),
+which also builds the thin-walled section from the same cut).
 The geometry has one skin thickness per section, so sandwich panels that differ from
 region to region still need the region-based builder.
 
-## Torsion: Saint-Venant, restrained warping and distortion
+## Beam-section theory
 
-`beam_section_properties` gives the Saint-Venant GJ of a segment. Three further
-tools follow the torsional response beyond it, each adding one physical
-contribution:
-
-```python
-from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
-
-section = ThinWalledSection.from_blade_mesh(blade, z=5.0)       # or from_segments(...)
-section.GJ, section.shear_flow, section.omega, section.shear_centre, section.EGamma
-
-beam = RestrainedTorsionBeam.from_section(section, length=10.0)    # Benscoter; vlasov=True for Vlasov
-r = beam.cantilever_tip_torque(1e3)      # twist, warping amplitude, bimoment, Saint-Venant / warping torque
-r = beam.solve(distributed_torque=50.0, supports={0.0: (True, True)})
-
-gbt = GeneralizedBeam(section, 10.0, warping="full", distortional_modes=8,
-                      z_nodes=GeneralizedBeam.graded_nodes(10.0, 40, stations=[5.0]))
-gbt.clamp(0.0).diaphragm(5.0).add_wall_load(10.0, gbt.walls_named("te_panel"), (0.0, -2e3))
-sol = gbt.solve()
-sol.mean_twist(z), sol.bimoment(z), sol.distortion(z, 0), sol.wall_resultants(z)
-```
-
-- **Saint-Venant** (`ThinWalledSection`). The section is a network of laminate walls.
-  The warping function is the one that minimises the membrane shear energy, which
-  gives the Bredt-Batho shear flows in any number of cells and the sectorial
-  coordinate on open branches in one solve. GJ adds each wall's plate twisting. The
-  shear centre is the pole that makes ω orthogonal to bending, and EΓ = ∫ Et ω² ds
-  plus the walls' own bending.
-- **Restrained warping** (`RestrainedTorsionBeam`). Benscoter's theory gives the
-  warping its own amplitude φ(z), with shear stiffness S = Ip − J; Vlasov's ties it to
-  the twist rate (S → ∞). Solved in closed form for cantilevers and by finite elements
-  for any supports. Outputs: bimoment B = −EΓ φ', warping stress N_zz = B Et ω / EΓ,
-  and the split of the torque into Saint-Venant and warping parts.
-- **Distortion** (`GeneralizedBeam`, Generalised Beam Theory). Every section point
-  gets an axial warping displacement and an in-plane displacement and rotation. The
-  walls are Kirchhoff plate strips with their full stiffness, couplings included. The
-  in-plane fields split into the three rigid modes and the distortional modes, which
-  are free of work with the Saint-Venant shear flows and ordered from the softest.
-  Choosing the modes gives each level: `warping="classical", distortional_modes=0` is
-  Benscoter's beam (with Timoshenko bending), `warping="full"` adds shear lag,
-  `distortional_modes=n` adds distortion, and `extensible=True` lets the walls stretch
-  round the contour. Clamps, ribs (`diaphragm`), warping restraints, Saint-Venant
-  torques, point forces and wall loads.
-
-Examples [27](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/27_box_spar_torsion/) (box spar) and
-[28](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/28_blade_torsion_hierarchy/) (three-cell blade section) check each layer
-against closed forms and the shell model.
-
-## Bending and axial load: shear, shear lag, distortion and end effects
-
-The same hierarchy applies to bending and extension. `TimoshenkoBeam` solves a beam
-from any 6 × 6 (or 4 × 4) section stiffness, and `GeneralizedBeam` adds the layers a
-beam stiffness cannot hold:
-
-```python
-from anisotropic_section_model import TimoshenkoBeam
-
-beam = TimoshenkoBeam(K6, length=10.0, n_elements=20)        # shear=False, or a 4 x 4: Euler-Bernoulli
-beam = TimoshenkoBeam.with_nodes_at(K6, 10.0, points=[4.0])  # element ends at supports and point loads
-sol = beam.clamp(0.0).pin(10.0).add_force(4.0, [0, -5e3, 0]).add_distributed([0, -2e3, 0]).solve()
-sol.node_displacement(4.0), sol.displacement(z), sol.section_forces(z), sol.strains(z), sol.reaction(0.0)
-```
-
-- **Euler-Bernoulli → Timoshenko.** Shear deflection is a few percent on a slender
-  blade and most of the answer on a short segment (half the tip deflection at
-  L/h = 6). Each element is exact for the section compliance it is given, so one
-  element per load or support point is enough for point and uniform loads, and the
-  response inside an element is recovered exactly. All couplings are kept.
-- **Shear lag** (`GeneralizedBeam`, warping modes). The axial stress across a wide
-  spar cap is not the plane-section straight line near a clamp or a load
-  introduction: it peaks at the webs and dips at mid-cap.
-- **Distortion** (distortional modes). A pressure on one skin bends that skin into the
-  section, which no beam stiffness can show. Ribs stop it.
-- **End effects** (`extensible=True`). Keeping the hoop strain and the full wall ABD
-  adds the Poisson restraint at a clamp and lets a point load diffuse sideways through
-  the walls, both of which die out within about one section width.
-
-Examples [30](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/30_box_spar_bending_axial/) (box spar) and
-[31](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/31_blade_bending_axial_hierarchy/) (blade section) check each layer
-against the shell model.
+Torsion beyond Saint-Venant (restrained warping, the bimoment, GBT distortion and
+ribs), thin-wall 6 × 6 and 7 × 7 stiffness, Timoshenko beams, and the bending and
+axial hierarchy (shear lag, distortion, end effects) live in
+[anisotropic-section-model](https://github.com/samhughes-fea/anisotropic-section-model),
+which builds on this package's `Laminate`. Its examples check each layer against
+shell models built here.
 
 ## Ply books, solids and ParaView
 
@@ -359,7 +276,7 @@ write_vtu("out/blade", solution, TsaiWuCriterion(), layered=True)   # model and 
   `LayeredHex20Element` take a laminate through their thickness and give the full
   3D stress state. `merge_coincident_nodes` joins solid blocks and
   `couple_shell_to_solid` ties shell edges to solid faces. See
-  [example 22](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/22_ply_drop_solid_detail/).
+  [example 22](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/22_ply_drop_solid_detail/).
 - **ParaView.** `write_vtu` writes the deformed model with displacements, stress
   resultants and failure indices, plus a second file with one cell per ply,
   offset through the thickness; `write_pvd` collects several load cases.
@@ -382,7 +299,7 @@ ex.to_csv("results/")
 
 For the bilinear element, moments and stresses are most accurate at element
 centroids (O(h²) convergence); nodal values are smoothed for plotting. See
-[example 03](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/03_result_fidelity/).
+[example 03](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/03_result_fidelity/).
 
 The constitutive shell stresses have no σz, and FSDT's interlaminar shear jumps
 between plies. `EquilibriumStressRecoverer` integrates the 3D equilibrium
@@ -397,8 +314,8 @@ tau_yz, tau_xz, sigma_z = rec.transverse_stresses(element, 0.0, 0.0, z)
 worst = rec.critical_interface()     # DelaminationOnsetCriterion by default
 ```
 
-See [example 02](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/02_through_thickness_stresses/) and
-[example 17](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/17_pagano_benchmark/), which checks it against Pagano's
+See [example 02](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/02_through_thickness_stresses/) and
+[example 17](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/17_pagano_benchmark/), which checks it against Pagano's
 3D solution.
 
 ## Elements, orientation and loads
@@ -430,8 +347,8 @@ results = StructuralGlobalSolver().solve_combinations(
 - **Checks.** `ModelChecker().check(mesh, bcs)` reports distorted or warped
   elements, CLPT on thick plates, likely unit mix-ups and missing supports.
 
-See [example 18](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/18_element_comparison/) and
-[example 19](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/19_load_combinations/).
+See [example 18](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/18_element_comparison/) and
+[example 19](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/19_load_combinations/).
 
 ## Meshing with Gmsh
 
@@ -459,11 +376,11 @@ Gmsh options (`"quad8_curved"` by default, `"tri3"`, `"quad4"`, `"quad8"`, `"tri
 the importer is given `curved=False`; for Quad8 in
 your own models use `Mesh.ElementOrder = 2` with `Mesh.SecondOrderIncomplete = 1`. Gmsh is
 optional: `pip install -e ".[gmsh]"`; headless Linux machines also need
-`libglu1-mesa`. See [example 08](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/08_open_hole_gmsh/).
+`libglu1-mesa`. See [example 08](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/08_open_hole_gmsh/).
 
 ## Examples
 
-[`examples/`](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/) holds thirty-one worked examples, each in its own folder
+[`examples/`](examples/) holds twenty-six worked examples, each in its own folder
 with a script, its figures and a README that walks through the model. Examples
 01–19 cover the laminate mechanics underneath: the kinematic theories,
 through-thickness stresses, result fidelity, hygrothermal loads, failure criteria
@@ -475,14 +392,11 @@ stresses at a ply drop, and a sandwich blade segment checked against a beam. Exa
 24 and 25 validate the blade tools on the IEA 15 MW reference blade: section
 properties against PreComp and the published data, and a 20 m segment against
 CalculiX. Example 26 compares skins meshed on the mould line with offset laminates
-and on their mid-surface. Examples 27 and 28 take torsion beyond Saint-Venant on a
-box spar and a three-cell blade section: restrained warping and the bimoment, then
-GBT distortion and ribs, each checked against closed forms and the shell model. Example
-29 builds the Timoshenko 6 × 6 and Timoshenko-Vlasov 7 × 7 section stiffness from the
-shell and from thin-wall theory, against the published IEA 15 MW data. Examples 30 and
-31 do for bending and axial load what 27 and 28 do for torsion: shear deflection, shear
-lag, distortion under a skin pressure and end effects, on a box spar and a blade
-section. Run them all with `python examples/run_all.py`.
+and on their mid-surface. Run them all with `python examples/run_all.py`.
+
+The torsion, section-stiffness and bending examples (27 to 32 before the split) are now
+examples 01 to 06 of
+[anisotropic-section-model](https://github.com/samhughes-fea/anisotropic-section-model/tree/main/examples/).
 
 ## Benchmark runner
 
@@ -547,7 +461,7 @@ CalculiX supports one uniform hygrothermal state; Nastran also takes per-element
 Every example checks itself against a reference: closed-form or series
 solutions, exact 3D elasticity, classical laminate and thin-walled beam theory,
 CalculiX, PreComp and the published IEA 15 MW data (see the
-[examples index](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/)). The test suite includes:
+[examples index](examples/)). The test suite includes:
 
 - Navier series solutions for simply supported cross-ply plates (CLPT and FSDT): the native solver is within 1% at a/h = 100 and a/h = 10, and each element type converges to them.
 - Pagano's exact 3D solution: RZT and layerwise centre deflections within 2–3% at a/h = 4 (FSDT is 11% stiff), and equilibrium-recovered interlaminar shear and σz within 3–4%.
@@ -557,14 +471,8 @@ CalculiX, PreComp and the published IEA 15 MW data (see the
 - First-ply failure of a [0/90]s laminate in tension at the CLT-predicted load.
 - Layered Hex8 and Hex20 solids against Pagano within about 1–2% (deflection and stresses), shell–solid coupling within 0.1% of an all-shell model, and curved Quad8 within 0.2% of CalculiX S8R on a curved panel.
 - Beam section properties of a thin circular tube against closed-form EA, EI and GJ (exact with curved Quad8, about 1% with Quad4), and RBE2/RBE3 links against hand calculations.
-- Timoshenko and Vlasov section stiffness (`tests/test_beam_stiffness.py`): thin-wall theory gives the thin tube's shear factor of 1/2 and the channel's textbook shear centre; on a box with no Poisson coupling the shell's 6 × 6 matches thin-wall theory term by term within 0.5%, and its fitted EΓ and warping shear stiffness within 6% and 15%.
 - A direct comparison with CalculiX, which runs only when `ccx` is installed. On the benchmark plate, displacements agree within about 2% and in-plane ply stresses within about 3%.
-- Thin-walled section properties against textbook closed forms: an isotropic box
-  (Bredt GJ, Benscoter warping function, EΓ, Ip), an I-beam (open GJ and Γ) and a channel
-  (shear centre and Γ), all exact. Benscoter and Vlasov finite elements against their
-  closed forms, and GBT against shell models of clamped boxes under a tip torque and a
-  web force couple, within 2% (examples 27 and 28 give the full comparison).
-- The IEA 15 MW reference blade ([example 24](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/24_iea15mw_section_properties/)): from its published layup, the tension centre agrees with PreComp on the same sections within 0.1% of the chord at six stations, and EA, EI and mass are 0–2% below PreComp because the mid-surface mesh takes each wall's mid-line length where PreComp takes the mould line (on the mould line they agree within 0.3%). At the root tube the shell model matches the published EA, GJ and mass within 0.1%. The shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](https://github.com/samhughes-fea/composite-laminate-fea/tree/main/examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within 0.2% in deflection, 1.2% in twist and 6% in spar-cap fibre stress.
+- The IEA 15 MW reference blade ([example 24](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/24_iea15mw_section_properties/)): from its published layup, the tension centre agrees with PreComp on the same sections within 0.1% of the chord at six stations, and EA, EI and mass are 0–2% below PreComp because the mid-surface mesh takes each wall's mid-line length where PreComp takes the mould line (on the mould line they agree within 0.3%). At the root tube the shell model matches the published EA, GJ and mass within 0.1%. The shear centre follows the published reference data rather than PreComp, and GJ lies between the two, close to the published data outboard, where PreComp's thin-wall torsion falls to half of it. A 20 m segment of the same blade ([example 25](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/25_blade_calculix_crosscheck/)) agrees with CalculiX S8R within 0.2% in deflection, 1.2% in twist and 6% in spar-cap fibre stress.
 
 ## Limitations
 
@@ -576,12 +484,11 @@ CalculiX, PreComp and the published IEA 15 MW data (see the
 - Gmsh cells other than Tri3, Tri6, Quad4 and Quad8 (for example 9-node quads) are rejected with a clear error.
 - The shells carry no through-thickness normal strain, so σ3 comes from `EquilibriumStressRecoverer` (post-processing) or from layered solids.
 - `beam_section_properties` needs a prismatic segment long enough for the end restraint of warping to die out before the middle fifth, where it measures: about 8 chords for uncoupled layups and 12 for bend-twist-coupled caps (at 6 chords a ±20° cap layup reads EI flap 9% and the coupling 23% high). A tapered blade is handled one station at a time.
-- With no ribs (`end_ribs=0`, the default), the GJ from `beam_section_properties` includes the cross-section distortion that the clamped root and rigid tip drive over the segment, a few percent either way (examples 28 and 29); `end_ribs=0.2` holds the end fifths rigid in their plane and gives the Saint-Venant GJ (use it with Quad4 or curved Quad8: flat Quad8 on a faceted curved section reads stiff with ribs).
+- With no ribs (`end_ribs=0`, the default), the GJ from `beam_section_properties` includes the cross-section distortion that the clamped root and rigid tip drive over the segment, a few percent either way (examples 02 and 03 of the section model); `end_ribs=0.2` holds the end fifths rigid in their plane and gives the Saint-Venant GJ (use it with Quad4 or curved Quad8: flat Quad8 on a faceted curved section reads stiff with ribs).
 - The Timoshenko shear stiffness depends on how the section rotation is defined, as shear warps the section. `beam_section_properties` uses the stiffness-weighted rotation (the one that does work with the bending moment). With Poisson's ratio it reads a few percent stiffer than thin-wall theory (the Poisson strain of the bending stress varies along a beam in shear, as in Cowper's shear coefficient): +7% on the glass root tube of the IEA 15 MW blade, where the published 6 × 6 sides with thin-wall theory.
-- `ThinWalledSection`, `RestrainedTorsionBeam` and `GeneralizedBeam` describe prismatic beams with straight walls between section points; the closed-form section properties (and the thin-wall 6 × 6 and 7 × 7) use the uncoupled wall stiffnesses, with each wall stretching and shearing without curving (GBT keeps all couplings). Off-axis walls' couplings (bend-twist, extension-twist, shear-bending) come only from the shell model (example 29).
 - Equilibrium recovery assumes the hygrothermal state is constant within each element, and is least accurate right at supports and free edges, where it falls back on the element shear force.
 - Tri3 is markedly stiffer than Quad4 for the same mesh; use it to fill regions that cannot take quads.
 
 ## License
 
-MIT; see [LICENSE](https://github.com/samhughes-fea/composite-laminate-fea/blob/main/LICENSE).
+MIT; see [LICENSE](LICENSE).

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from conftest import navier_clpt_centre_moments, simply_supported
-from laminate_modelling_package import (
+from composite_laminate_model import (
     DOF,
     BoundaryConditions,
     FEAMesh,
@@ -22,7 +22,7 @@ A = 0.2
 
 @pytest.fixture(scope="module")
 def plate(request):
-    from laminate_modelling_package import create_default_library
+    from composite_laminate_model import create_default_library
 
     cfrp = create_default_library().get("T300/5208")
     lam = Laminate.from_angles(cfrp, [0, 90, 90, 0], 0.5e-3)

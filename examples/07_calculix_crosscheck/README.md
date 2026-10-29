@@ -8,7 +8,7 @@ displacements and ply stresses.
 
 ## The model
 
-The model is the one the `laminate-benchmarks` runner (`laminate_modelling_package.run_solver_benchmarks`) builds:
+The model is the one the `laminate-benchmarks` runner (`composite_laminate_model.run_solver_benchmarks`) builds:
 
 | Item | Value |
 |---|---|

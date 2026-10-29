@@ -19,7 +19,7 @@ import numpy as np
 
 from _shared.analytical import navier_clpt_centre, navier_fsdt_centre
 from _shared.plotting import MODEL_COLOURS, REFERENCE, TEXT_SECONDARY, plt, save, simply_supported
-from laminate_modelling_package import (
+from composite_laminate_model import (
     CLPTModel,
     ElasticProperties3D,
     ExactStressRecoverer,

@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
-from laminate_modelling_package import CalculiXKernelAdapter, NativePythonKernelAdapter, StressDistributionVerifier
-from laminate_modelling_package.run_solver_benchmarks import build_model
+from composite_laminate_model import CalculiXKernelAdapter, NativePythonKernelAdapter, StressDistributionVerifier
+from composite_laminate_model.run_solver_benchmarks import build_model
 
 WORK_DIR = Path(__file__).resolve().parent / "calculix_run"
 

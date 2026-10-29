@@ -6,13 +6,27 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The package is now `composite_laminate_model`, split out of composite-laminate-fea
+  with its history. The implicit geometry is its own package,
+  [implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel)
+  (formerly `blade_geometry_model`), and thin-walled beam-section theory is
+  [anisotropic-section-model](https://github.com/samhughes-fea/anisotropic-section-model),
+  together with former examples 27 to 32. `Airfoil`, `Station`, `SkinRegion` and
+  `ShearWeb` are still importable from `composite_laminate_model`.
+
+### Removed
+
+- The `laminate_modelling_package` compatibility shim.
+
 ### Added
 
-- `blade_geometry_model` now holds a fork, with history, of blade-structure's
+- `implicit_geometry_kernel` now holds a fork, with history, of blade-structure's
   implicit section geometry: `section_geometry` (signed-distance solids with CSG,
   40 structural layouts, wall midlines and cell-wall loops) with `section_contract`,
   `coordinate_frames`, `area_2d` and `shoelace_integration`, and their 785 tests.
-  `src/blade_geometry_model/FORK.md` records the fork point and the files that stayed
+  `src/implicit_geometry_kernel/FORK.md` records the fork point and the files that stayed
   in blade-structure.
 - `BladeGeometry` lofts one of those layouts between `Station`s (chord, twist, pitch
   axis, offset and airfoil interpolated linearly) and `section_at(z)` returns a
@@ -46,9 +60,9 @@ All notable changes to this project are listed here. The format follows
 - Python 3.11 or newer is required (the forked geometry needs it; 3.9 and 3.10 are
   past end of life). Shapely and Numba are now dependencies.
 - pytest imports test modules by path (`--import-mode=importlib`) and also collects
-  the geometry's tests under `src/blade_geometry_model`.
+  the geometry's tests under `src/implicit_geometry_kernel`.
 - The code is split into three packages, each depending only on the ones before it:
-  `blade_geometry_model` (`Airfoil`, `Station`, `SkinRegion`, `ShearWeb`),
+  `implicit_geometry_kernel` (`Airfoil`, `Station`, `SkinRegion`, `ShearWeb`),
   `composite_laminate_model` (laminate mechanics, shell and solid FE, solver,
   kernels, `BladeBuilder`, `beam_section_properties`) and
   `anisotropic_section_model` (`ThinWalledSection`, `RestrainedTorsionBeam`,

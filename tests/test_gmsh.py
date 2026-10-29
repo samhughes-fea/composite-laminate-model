@@ -5,7 +5,7 @@ import pytest
 
 pytest.importorskip("gmsh", exc_type=ImportError)
 
-from laminate_modelling_package import (  # noqa: E402
+from composite_laminate_model import (  # noqa: E402
     DOF,
     BoundaryConditions,
     CircularHole,
@@ -152,7 +152,7 @@ def test_unknown_element_choice_is_rejected():
 
 
 def test_remove_nodes_keeps_the_dof_map_consistent(cfrp):
-    from laminate_modelling_package import FEAMesh
+    from composite_laminate_model import FEAMesh
 
     lam = Laminate.from_angles(cfrp, [0], 0.25e-3)
     mesh = FEAMesh.rectangular_plate(0.1, 0.1, 1, 1, lam, FSDTModel())

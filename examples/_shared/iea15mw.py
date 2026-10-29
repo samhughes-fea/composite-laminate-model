@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from laminate_modelling_package import (
+from composite_laminate_model import (
     Airfoil,
     BladeBuilder,
     FSDTModel,
@@ -24,8 +24,8 @@ from laminate_modelling_package import (
     SkinRegion,
     Station,
 )
-from laminate_modelling_package.laminate_materials import MaterialCard
-from laminate_modelling_package.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
+from composite_laminate_model.laminate_materials import MaterialCard
+from composite_laminate_model.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
 
 DATA_FILE = Path(__file__).resolve().parents[1] / "24_iea15mw_section_properties" / "data" / "iea15mw_sections.json"
 DATA = json.loads(DATA_FILE.read_text())

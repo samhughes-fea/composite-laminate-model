@@ -36,7 +36,7 @@ import numpy as np
 
 from _shared.iea15mw import DATA, build_segment
 from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
-from laminate_modelling_package import (
+from composite_laminate_model import (
     AnalysisModel,
     BoundaryConditions,
     CalculiXKernelAdapter,

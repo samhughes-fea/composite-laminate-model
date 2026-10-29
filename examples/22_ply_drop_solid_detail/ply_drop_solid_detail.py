@@ -30,7 +30,7 @@ import numpy as np
 from matplotlib.tri import Triangulation
 
 from _shared.plotting import DIVERGING, SERIES, TEXT_SECONDARY, plt, save
-from laminate_modelling_package import (
+from composite_laminate_model import (
     BoundaryConditions,
     FEAMesh,
     FSDTModel,

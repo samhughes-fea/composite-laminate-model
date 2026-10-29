@@ -64,7 +64,7 @@ def navier_clpt_moment_field(D, a, b, q, x, y, terms=99):
 
 
 def _rotated_stiffness_3d(laminate):
-    from laminate_modelling_package.laminate_materials_3d import rotate_stiffness_3d
+    from composite_laminate_model.laminate_materials_3d import rotate_stiffness_3d
 
     return [rotate_stiffness_3d(p.material.elastic.stiffness_matrix(), p.angle) for p in laminate.plies]
 
