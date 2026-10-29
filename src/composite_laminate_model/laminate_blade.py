@@ -53,11 +53,13 @@ class BladeMesh:
     mould_line: Optional["BladeMesh"] = field(default=None, repr=False, compare=False)
     _mid_laminates: Dict[int, Laminate] = field(default_factory=dict, repr=False, compare=False)
     _smoothing: Optional[float] = field(default=None, repr=False, compare=False)
+    # the BladeGeometry a mesh from ``BladeBuilder.from_geometry`` was cut from
+    geometry: Optional[object] = field(default=None, repr=False, compare=False)
 
     @property
     def surface(self) -> str:
         """``"mid"`` for skins meshed on their mid-surface, ``"outer"`` on the mould line."""
-        return "mid" if self.mould_line is not None else "outer"
+        return "mid" if self.mould_line is not None or self.geometry is not None else "outer"
 
     def nodes(self, name: str) -> List[int]:
         try:
@@ -99,6 +101,9 @@ class BladeMesh:
         defaults to the length used the first time. So after applying a ``Layup`` to
         a mid-surface blade, call ``blade = blade.to_mid_surface()``.
         """
+        if self.geometry is not None:
+            raise ValueError("a mesh built from a BladeGeometry is on its mid-surface already; change the geometry's "
+                             "wall thicknesses and mesh it again instead")
         return _mid_surface(self, smoothing)
 
 
@@ -199,6 +204,19 @@ class BladeBuilder:
         f = self.span_fractions
         if f.size < 2 or abs(f[0]) > 1e-12 or abs(f[-1] - 1.0) > 1e-12 or np.any(np.diff(f) <= 0):
             raise ValueError("n_span must be >= 1 or increasing fractions from 0 to 1")
+
+    @staticmethod
+    def from_geometry(geometry, n_span: Union[int, Sequence[float]] = 10, element: str = "quad8_curved",
+                      element_size: Optional[float] = None, wall_elements: Optional[Dict[str, int]] = None,
+                      material_axis=(0.0, 0.0, 1.0)) -> "GeometryBladeBuilder":  # noqa: F821
+        """Mesh a ``blade_geometry_model.BladeGeometry`` instead of explicit regions and webs.
+
+        See ``GeometryBladeBuilder``: the shells lie on the walls' mid-surfaces cut from
+        the geometry along the span, with spar caps merged into their skins.
+        """
+        from .laminate_blade_geometry import GeometryBladeBuilder
+
+        return GeometryBladeBuilder(geometry, n_span, element, element_size, wall_elements, material_axis)
 
     # ------------------------------------------------------------ geometry
     def _station_at(self, z: float):

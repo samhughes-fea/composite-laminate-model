@@ -24,6 +24,22 @@ All notable changes to this project are listed here. The format follows
   laminates bound by label, region or kind and spar caps merged into the skin they are
   bonded to. On the example 20 section it matches `from_blade_mesh` to within 1% in EA,
   EI and GJ.
+- `BladeBuilder.from_geometry(geometry, n_span, element, element_size, wall_elements)`
+  meshes a `BladeGeometry` as shells on its walls' mid-surfaces, with spar caps merged
+  into their skins and element sets named after the geometry's labels. It meshes any
+  of the 40 layouts, and on the example 20 section it matches the region-based
+  `BladeBuilder` model to within 1% in EA, EI and GJ.
+- `SectionCut.mid_surface()`: the wall graph that `from_geometry` and the mesher share.
+- Example 32: a blade from its implicit geometry.
+
+### Fixed
+
+- `BladeGeometry.section_at` now builds the section at the station's twist, so
+  flapwise (`-F`) webs stay normal to the rotor plane on a twisted blade instead of
+  turning with the chord like chord-normal (`-CN`) webs.
+- Caps reaching less than their own thickness past a web onto the next skin, and bare
+  skin slivers that short at a cap's end, are no longer separate walls. Whether they
+  showed up depended on the sampling, so the section's walls changed along the span.
 
 ### Changed
 
