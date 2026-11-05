@@ -43,7 +43,7 @@ jobs:
         run: |
           python -m venv /tmp/wheel-env
           # the geometry kernel is not on PyPI yet: install it from its repository first
-          /tmp/wheel-env/bin/pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@59adf17bb613e75d53192eb64a4ecbcb96acde4c"
+          /tmp/wheel-env/bin/pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@409fbfa854e835092695988b33b02dfdb34eed37"
           /tmp/wheel-env/bin/pip install dist/*.whl
           cd /tmp && /tmp/wheel-env/bin/python -c "import composite_laminate_model as clm; print(clm.__version__, len(clm.__all__), 'public names')"
           /tmp/wheel-env/bin/laminate-benchmarks --n 4 --work-dir /tmp/bench
