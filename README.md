@@ -11,8 +11,9 @@ own: no mesh, no solver and no geometry. It needs NumPy alone.
 - section stiffness for four through-thickness theories: CLPT, FSDT, refined zig-zag
   (RZT) and layerwise, written as generalised section matrices
 - hygrothermal (thermal and moisture) expansion and resultants
-- failure criteria: maximum stress, Tsai-Hill, Tsai-Wu, Hashin and a delamination
-  onset check, with a registry for your own
+- failure criteria: maximum stress, Tsai-Hill, Tsai-Wu, Hashin, Puck and a delamination
+  onset check, with a registry for your own, and array exposures for many stress
+  states at once
 - Pagano's exact 3D solution for a simply supported cross-ply plate, as a benchmark
 
 It was split out of composite-laminate-model, whose finite elements, solver, meshing
@@ -30,7 +31,8 @@ and blade models are now [shell-fem](https://github.com/samhughes-fea/shell-fem)
 │   │   ├── laminate_mechanics.py           Ply (Q, Q_s, Q_bar, Q_bar_s), Laminate, Reuter transforms
 │   │   ├── laminate_temperature.py         TemperatureDependentMaterial
 │   │   ├── laminate_kinematics.py          integrate_abd; CLPT, FSDT, RZT, layerwise section matrices
-│   │   ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu, Hashin, delamination; registry
+│   │   ├── laminate_failure_criteria.py    Max stress, Tsai-Hill, Tsai-Wu, Hashin, Puck, delamination; registry
+│   │   ├── laminate_ply_exposure.py        the criteria over arrays of stress states, as exposures
 │   │   └── laminate_elasticity_3d.py       PaganoPlate: exact 3D cross-ply solution
 │   └── composite_laminate_model/           the old import name, re-exporting the above (deprecated)
 ├── examples/                               worked examples with figures (see examples/README.md)
@@ -115,6 +117,8 @@ The test suite includes:
 - hygrothermal expansion coefficients and resultants against numerical integration;
 - every failure criterion giving an index of 1 at each uniaxial strength, the Hoffman
   interaction coefficient, and Hashin's modes and 2D matrix-compression formula.
+- Puck's plane-stress modes A, B and C against their closed forms, and the array
+  exposures against the scalar criteria and against 1d-fem's results to 1e-12.
 
 The finite-element checks of these laws (Navier, Pagano, free thermal warping,
 first-ply failure, CalculiX) live with the elements in

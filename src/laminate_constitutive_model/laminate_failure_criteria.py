@@ -333,6 +333,48 @@ class DelaminationOnsetCriterion(FailureCriterion):
         return f"DelaminationOnsetCriterion(compression_factor={self.compression_factor})"
 
 
+class PuckCriterion(FailureCriterion):
+    """Puck's physically based criterion (Puck and Schuermann 2002; VDI 2014).
+
+    Fibre failure is ``s1 / Xt`` or ``-s1 / Xc``. Inter-fibre failure is evaluated on the
+    most stressed action plane parallel to the fibres, found by a search over the plane
+    angle, with the inclination parameters in ``PuckParameters``. ``index`` is the exposure
+    (linear in the load), so ``strength_ratio = 1 / index``. ``puck_exposure`` also gives
+    the fracture-plane angle.
+    """
+
+    name = "Puck"
+
+    def __init__(self, parameters=None):
+        from .laminate_ply_exposure import PuckParameters
+
+        self.parameters = parameters if parameters is not None else PuckParameters()
+
+    def evaluate(self, stress, strength):
+        from .laminate_ply_exposure import puck_exposure
+
+        s = _as_stress(stress)
+        f, mode, _ = (np.asarray(x).item() for x in puck_exposure(s, strength, self.parameters))
+        fibre = s[0] / strength.Xt if s[0] >= 0.0 else -s[0] / strength.Xc
+        modes = {
+            "FFT": FailureMode.FIBER_TENSION,
+            "FFC": FailureMode.FIBER_COMPRESSION,
+            "IFF-A": FailureMode.MATRIX_TENSION,
+            "IFF-B": FailureMode.MATRIX_COMPRESSION,
+            "IFF-C": FailureMode.MATRIX_COMPRESSION,
+        }
+        governing = modes[mode] if f > 0.0 else FailureMode.NONE
+        fibre_mode = FailureMode.FIBER_TENSION if s[0] >= 0.0 else FailureMode.FIBER_COMPRESSION
+        indices = {fibre_mode.value: float(fibre)}
+        if governing not in (FailureMode.NONE, fibre_mode):
+            indices[governing.value] = float(f)
+        ratio = float("inf") if f <= 0.0 else 1.0 / f
+        return FailureResult(self.name, float(f), ratio, governing, indices)
+
+    def __repr__(self) -> str:
+        return f"PuckCriterion({self.parameters!r})"
+
+
 CriterionFactory = Callable[[], FailureCriterion]
 
 CRITERIA: Dict[str, CriterionFactory] = {
@@ -342,6 +384,7 @@ CRITERIA: Dict[str, CriterionFactory] = {
     "hashin_2d": lambda: HashinCriterion("2d"),
     "hashin_3d": lambda: HashinCriterion("3d"),
     "delamination": DelaminationOnsetCriterion,
+    "puck": PuckCriterion,
 }
 
 
