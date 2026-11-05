@@ -6,6 +6,19 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Puck's criterion** (`PuckCriterion`, registered as `"puck"`, with `PuckParameters`):
+  fibre failure plus inter-fibre failure on the most stressed action plane, from Puck
+  and Schuermann (2002) and VDI 2014.
+- **Array exposures** (`laminate_ply_exposure`): `max_stress_exposure`,
+  `tsai_wu_exposure`, `hashin_exposure`, `puck_exposure` and `ply_exposures` evaluate
+  whole arrays of ply stresses `(..., 6)` and return exposures (`1 / strength_ratio`,
+  linear in the load) with their modes. They reproduce 1d-fem's `ply_failure` to 1e-12,
+  so 1d-fem and anisotropic-section-model can use them in place of their own copy.
+
+## [0.2.0] - 2026-11-05
+
 ### Changed
 
 - **Split.** The repository is now laminate-constitutive-model, holding only the ply

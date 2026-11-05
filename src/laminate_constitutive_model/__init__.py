@@ -24,11 +24,20 @@ from .laminate_failure_criteria import (
     DelaminationOnsetCriterion,
     HashinCriterion,
     MaximumStressCriterion,
+    PuckCriterion,
     TsaiHillCriterion,
     TsaiWuCriterion,
     available_criteria,
     create_criterion,
     register_criterion,
+)
+from .laminate_ply_exposure import (
+    PuckParameters,
+    hashin_exposure,
+    max_stress_exposure,
+    ply_exposures,
+    puck_exposure,
+    tsai_wu_exposure,
 )
 from .laminate_elasticity_3d import PaganoPlate, PaganoProfile
 from .laminate_temperature import TemperatureDependentMaterial, apply_operating_temperature, laminate_at_temperature
