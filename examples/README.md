@@ -77,8 +77,7 @@ examples/
 │   ├── analytical.py           Navier series solutions used as references
 │   ├── membrane.py             one-element membrane cell for failure envelopes and sweeps
 │   ├── iea15mw.py              IEA 15 MW blade stations as BladeBuilder regions and laminates
-│   └── torsion.py              box spar shell, ribs, shear-flow torques, shell twist, bimoment
-│                                and wall stress resultants (examples 27-31)
+│   └── thin_wall.py            thin-walled beam reference for closed multi-cell sections (examples 20, 21)
 └── NN_<name>/
     ├── README.md               walkthrough with the figures
     ├── <name>.py               the script
