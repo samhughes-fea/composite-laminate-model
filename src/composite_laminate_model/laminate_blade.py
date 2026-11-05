@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from implicit_geometry_kernel.blade_geometry import Airfoil, ShearWeb, SkinRegion, Station
+from implicit_geometry_kernel import Airfoil, ShearWeb, SkinRegion, Station
 
 from .laminate_kinematics import KinematicModel
 from .laminate_mechanics import Laminate
