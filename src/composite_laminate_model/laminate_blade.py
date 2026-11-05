@@ -55,6 +55,8 @@ class BladeMesh:
     _smoothing: Optional[float] = field(default=None, repr=False, compare=False)
     # the BladeGeometry a mesh from ``BladeBuilder.from_geometry`` was cut from
     geometry: Optional[object] = field(default=None, repr=False, compare=False)
+    # spar-cap node -> the skin node it is rigidly tied to (``caps="tied"``); see ``tie_caps``
+    ties: Dict[int, int] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def surface(self) -> str:
@@ -74,8 +76,31 @@ class BladeMesh:
             raise KeyError(f"No element set '{name}'. Available: {', '.join(self.element_sets)}") from exc
 
     def section_nodes(self, z: float, tol: float = 1e-9) -> List[int]:
-        """Nodes of the cross-section at span position ``z`` (a mesh section)."""
-        return [n for n in self.node_sets["all"] if abs(self.mesh.node_coordinates(n)[2] - z) <= tol]
+        """Nodes of the cross-section at span position ``z`` (a mesh section).
+
+        Tied spar-cap nodes are left out: they follow the skin nodes they are tied to.
+        """
+        return [n for n in self.node_sets["all"]
+                if abs(self.mesh.node_coordinates(n)[2] - z) <= tol and n not in self.ties]
+
+    def tie_caps(self, bcs, mesh=None):
+        """Add the rigid links that tie each spar-cap node to its skin node (``caps="tied"``).
+
+        Each cap node follows its skin node rigidly, u_cap = u_skin + theta_skin x r with r
+        the offset between them, in all six DOFs (an RBE2 per node). A cap DOF that
+        ``bcs`` already constrains is left as it is. ``mesh`` is the mesh the links
+        refer to (``self.mesh`` by default, or a copy of it with reference nodes added).
+        Returns ``bcs``. Does nothing on a mesh without tied caps.
+        """
+        from .laminate_connectors import rigid_link
+
+        mesh = self.mesh if mesh is None else mesh
+        taken = bcs.constrained_keys()
+        for cap, skin in self.ties.items():
+            dofs = [d for d in range(6) if (cap, d) not in taken]
+            if dofs:
+                rigid_link(mesh, bcs, skin, [cap], dofs=dofs)
+        return bcs
 
     def to_mid_surface(self, smoothing: Optional[float] = None) -> "BladeMesh":
         """The same blade meshed on the skin laminates' mid-surface instead of the mould line.
@@ -208,15 +233,16 @@ class BladeBuilder:
     @staticmethod
     def from_geometry(geometry, n_span: Union[int, Sequence[float]] = 10, element: str = "quad8_curved",
                       element_size: Optional[float] = None, wall_elements: Optional[Dict[str, int]] = None,
-                      material_axis=(0.0, 0.0, 1.0)) -> "GeometryBladeBuilder":  # noqa: F821
+                      material_axis=(0.0, 0.0, 1.0), caps: str = "merged") -> "GeometryBladeBuilder":  # noqa: F821
         """Mesh a ``implicit_geometry_kernel.BladeGeometry`` instead of explicit regions and webs.
 
         See ``GeometryBladeBuilder``: the shells lie on the walls' mid-surfaces cut from
-        the geometry along the span, with spar caps merged into their skins.
+        the geometry along the span, with spar caps merged into their skins
+        (``caps="merged"``) or as shells of their own tied to the skins (``caps="tied"``).
         """
         from .laminate_blade_geometry import GeometryBladeBuilder
 
-        return GeometryBladeBuilder(geometry, n_span, element, element_size, wall_elements, material_axis)
+        return GeometryBladeBuilder(geometry, n_span, element, element_size, wall_elements, material_axis, caps)
 
     # ------------------------------------------------------------ geometry
     def _station_at(self, z: float):
@@ -742,7 +768,7 @@ def beam_section_properties(
     if zb <= za:
         raise ValueError("z_range must span at least one mesh section")
     ref = (0.0, 0.0) if reference is None else (float(reference[0]), float(reference[1]))
-    bcs = BoundaryConditions().clamp(blade.nodes("root"))
+    bcs = blade.tie_caps(BoundaryConditions(), mesh).clamp(blade.nodes("root"))
     tip = add_reference_node(mesh, (ref[0], ref[1], z1))
     rigid_link(mesh, bcs, tip, blade.nodes("tip"), dofs=(0, 1, 2))  # a rigid tip diaphragm
     if end_ribs > 0.0:
@@ -756,7 +782,7 @@ def beam_section_properties(
         n = add_reference_node(mesh, (ref[0], ref[1], z))
         nodes = blade.section_nodes(z)
         if section_weighting == "stiffness":
-            weights = _section_weights(mesh, z, nodes)
+            weights = _section_weights(mesh, z, nodes, blade.ties)
         elif section_weighting == "uniform":
             weights = None
         else:
@@ -825,9 +851,11 @@ def beam_section_properties(
                                  (float(x_sc + ref[0]), float(y_sc + ref[1])), float(m), centre, K6, K7, S_w)
 
 
-def _section_weights(mesh, z: float, nodes: Sequence[int]) -> List[float]:
+def _section_weights(mesh, z: float, nodes: Sequence[int], ties: Optional[Dict[int, int]] = None) -> List[float]:
     """Axial stiffness share of each section node: Et (= 1 / (A^-1)_11 along the beam axis)
-    times its share of the element edges on the section (Simpson weights on quadratic edges)."""
+    times its share of the element edges on the section (Simpson weights on quadratic edges).
+    A tied cap node's share goes to the skin node it is tied to."""
+    ties = ties or {}
     from .laminate_kinematics import integrate_abd
 
     weight = {int(n): 0.0 for n in nodes}
@@ -854,10 +882,12 @@ def _section_weights(mesh, z: float, nodes: Sequence[int]) -> List[float]:
             length = float(np.linalg.norm(X[b_] - X[a_]))
             if len(ids) == 2 * nc:
                 for n, f in ((ids[a_], 1.0 / 6.0), (ids[nc + k], 4.0 / 6.0), (ids[b_], 1.0 / 6.0)):
+                    n = ties.get(n, n)
                     if n in weight:
                         weight[n] += Et * length * f
             else:
                 for n in (ids[a_], ids[b_]):
+                    n = ties.get(n, n)
                     if n in weight:
                         weight[n] += 0.5 * Et * length
     return [weight[int(n)] for n in nodes]
@@ -880,7 +910,7 @@ def _fit_warping_stiffness(blade: BladeMesh, shear_centre, solver) -> Tuple[floa
     mesh = blade.mesh.copy()
     zs = np.asarray(blade.span_positions)
     z0 = float(zs[0])
-    bcs = BoundaryConditions().clamp(blade.nodes("root"))
+    bcs = blade.tie_caps(BoundaryConditions(), mesh).clamp(blade.nodes("root"))
     refs = []
     for z in zs[1:]:
         r = add_reference_node(mesh, (shear_centre[0], shear_centre[1], float(z)))

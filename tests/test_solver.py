@@ -102,6 +102,32 @@ def test_constraint_with_constant_offset(cfrp):
     assert result.node_displacement(n2)[0] == pytest.approx(1e-5)
 
 
+def test_chained_constraints_are_substituted(cfrp):
+    lam, mesh, bcs, L, b = membrane_strip(cfrp)
+    right = sorted(mesh.nodes_on_line(0, L))
+    master = right[0]
+    for a, c in zip(right[1:], right[:-1]):  # each node tied to the one before it: a chain
+        bcs.tie((a, DOF.UX), (c, DOF.UX))
+    resolved = bcs.resolved_constraints()
+    assert all(c.masters == (((master, int(DOF.UX)), 1.0),) for c in resolved)
+    loads = LoadCase().add_nodal_load(master, DOF.UX, 100.0)
+    result = StructuralGlobalSolver().solve(mesh, bcs, loads)
+    ux = [result.node_displacement(n)[0] for n in right]
+    a11 = np.linalg.inv(integrate_abd(lam)[:3, :3])[0, 0]
+    assert np.allclose(ux, 100.0 / b * a11 * L, rtol=1e-6)
+
+
+def test_constraint_loops_and_double_slaves_are_rejected(cfrp):
+    lam, mesh, bcs, L, b = membrane_strip(cfrp)
+    n1, n2 = mesh.closest_node((L, 0.0)), mesh.closest_node((L, b))
+    bcs.tie((n1, DOF.UX), (n2, DOF.UX)).tie((n2, DOF.UX), (n1, DOF.UX))
+    with pytest.raises(ValueError, match="loop"):
+        bcs.resolved_constraints()
+    bcs = BoundaryConditions().tie((n1, DOF.UX), (n2, DOF.UX)).tie((n1, DOF.UX), (n2, DOF.UY))
+    with pytest.raises(ValueError, match="more than one"):
+        bcs.resolved_constraints()
+
+
 def test_invalid_constraints_are_rejected(cfrp):
     lam, mesh, bcs, L, b = membrane_strip(cfrp)
     n = mesh.closest_node((L, b))

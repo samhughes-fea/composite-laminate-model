@@ -2,7 +2,7 @@
 
 Worked examples that exercise the package end to end, from a single plate
 solve to blade structures. Examples 01–19 cover the laminate mechanics underneath;
-20–26 are blade sections, spar caps and blade segments, with 24 to 26 validating
+20–27 are blade sections, spar caps and blade segments, with 24 to 26 validating
 them on the IEA 15 MW reference blade. The beam-section examples (torsion beyond
 Saint-Venant, Timoshenko and Vlasov section stiffness, bending and axial hierarchies, and
 sections cut from the implicit geometry) are in
@@ -44,6 +44,7 @@ and how to read the results.
 | 24 | [IEA 15 MW section properties](24_iea15mw_section_properties/) | The published reference blade at six stations against PreComp and the published data; why skins are meshed on their mid-surface (torsion of offset skins on flat shells) | `BladeBuilder`, `beam_section_properties` |
 | 25 | [CalculiX on a blade segment](25_blade_calculix_crosscheck/) | A 20 m IEA 15 MW segment under operating loads: deflection, twist and ply stresses against CalculiX S8R | `CalculiXKernelAdapter`, `AnalysisModel` |
 | 26 | [Mid-surface meshing](26_mid_surface_meshing/) | Skins on the mould line with offsets or on their mid-surface: thick-tube torsion and six IEA 15 MW stations, for Quad4, flat and curved Quad8 | `BladeBuilder(mesh_surface=...)`, `BladeMesh.to_mid_surface` |
+| 27 | [Tied spar caps](27_tied_spar_caps/) | Spar caps merged into the skin or as separate shells tied to it by rigid offset links: beam stiffness, and how the cap and skin share axial and shear load | `BladeBuilder.from_geometry(caps="tied")`, `BladeMesh.tie_caps` |
 
 All examples are linear static analyses, and each one compares its results with a
 reference: a closed-form or series solution, exact 3D elasticity, laminate or

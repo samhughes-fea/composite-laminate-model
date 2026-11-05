@@ -3,7 +3,9 @@
 import numpy as np
 import pytest
 
-from composite_laminate_model import BladeBuilder, FSDTModel, Laminate, create_default_library
+from composite_laminate_model import (BladeBuilder, BoundaryConditions, FSDTModel, Laminate, LoadCase,
+                                      SingularStiffnessError, StructuralGlobalSolver, create_default_library)
+from composite_laminate_model.laminate_blade import beam_section_properties
 from implicit_geometry_kernel import Airfoil, BladeGeometry, Station
 
 
@@ -105,3 +107,56 @@ def test_geometry_mesh_laminates_as_functions_of_span(laminates):
     t = {round(e.laminate.thickness, 6) for e in blade.mesh.shell_elements
          if e.element_id in set(blade.elements("skin_suction_surface:leading_edge"))}
     assert t == {0.003, 0.004}
+
+
+@pytest.fixture(scope="module")
+def tied_pair(laminates):
+    """The same blade with merged and with tied spar caps (coarse, for stiffness checks)."""
+    geo = _geometry()
+    return tuple(BladeBuilder.from_geometry(geo, n_span=8, element_size=0.05, caps=caps).build(laminates, FSDTModel())
+                 for caps in ("merged", "tied"))
+
+
+def test_tied_caps_are_separate_shells_on_their_own_mid_surface(tied_pair):
+    merged, blade = tied_pair
+    assert not merged.ties and blade.ties
+    caps, skin = set(blade.elements("caps")), set(blade.elements("skin"))
+    assert caps and not caps & skin
+    assert caps == set(blade.elements("spar_cap_suction_surface")) | set(blade.elements("spar_cap_pressure_surface"))
+    assert not caps & set(blade.elements("skin_suction_surface"))
+    mesh = blade.mesh
+    by_id = {e.element_id: e for e in mesh.shell_elements}
+    assert {round(by_id[e].laminate.thickness, 6) for e in caps} == {0.008}
+    # every cap node is tied, its link spans half the skin and half the cap, along the skin normal
+    assert sorted(blade.ties) == blade.nodes("caps")
+    cut = blade.geometry.section_at(2.0)
+    t_skin, t_cap = cut.walls_of("skin")[0].thickness, cut.walls_of("cap")[0].thickness
+    lengths = [np.linalg.norm(mesh.node_coordinates(c) - mesh.node_coordinates(s)) for c, s in blade.ties.items()]
+    assert np.allclose(lengths, 0.5 * (t_skin + t_cap), rtol=2e-3)
+    for cap, s in blade.ties.items():
+        assert mesh.node_coordinates(cap)[2] == mesh.node_coordinates(s)[2]
+    # cap nodes follow the skin through the links, so no root, tip or section set holds them
+    for nodes in (blade.nodes("root"), blade.nodes("tip"), blade.section_nodes(2.0)):
+        assert nodes and not set(nodes) & set(blade.ties)
+
+
+def test_tied_caps_float_unless_tied(tied_pair):
+    _, blade = tied_pair
+    bcs = BoundaryConditions().clamp(blade.nodes("root"))
+    load = LoadCase().add_nodal_load(blade.nodes("tip")[0], 1, 1.0)
+    with pytest.raises(SingularStiffnessError):
+        StructuralGlobalSolver().solve(blade.mesh, bcs, load)
+    sol = StructuralGlobalSolver().solve(blade.mesh, blade.tie_caps(bcs), load)
+    for cap, skin in list(blade.ties.items())[::50]:  # the links move rigidly
+        u_c, u_s = sol.node_displacement(cap), sol.node_displacement(skin)
+        r = blade.mesh.node_coordinates(cap) - blade.mesh.node_coordinates(skin)
+        assert np.allclose(u_c[:3], u_s[:3] + np.cross(u_s[3:], r), atol=1e-12)
+        assert np.allclose(u_c[3:], u_s[3:], atol=1e-12)
+
+
+def test_tied_caps_keep_the_beam_stiffness(tied_pair):
+    """Tied caps move with the skin as a stacked laminate does, so the beam stiffness hardly changes."""
+    merged, tied = (beam_section_properties(b) for b in tied_pair)
+    for name in ("EA", "EI_x", "EI_y"):
+        assert getattr(tied, name) == pytest.approx(getattr(merged, name), rel=0.01), name
+    assert tied.GJ == pytest.approx(merged.GJ, rel=0.03)
