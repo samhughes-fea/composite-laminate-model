@@ -768,7 +768,7 @@ def beam_section_properties(
     if zb <= za:
         raise ValueError("z_range must span at least one mesh section")
     ref = (0.0, 0.0) if reference is None else (float(reference[0]), float(reference[1]))
-    bcs = blade.tie_caps(BoundaryConditions(), mesh).clamp(blade.nodes("root"))
+    bcs = _tie_caps(blade, BoundaryConditions(), mesh).clamp(blade.nodes("root"))
     tip = add_reference_node(mesh, (ref[0], ref[1], z1))
     rigid_link(mesh, bcs, tip, blade.nodes("tip"), dofs=(0, 1, 2))  # a rigid tip diaphragm
     if end_ribs > 0.0:
@@ -782,7 +782,7 @@ def beam_section_properties(
         n = add_reference_node(mesh, (ref[0], ref[1], z))
         nodes = blade.section_nodes(z)
         if section_weighting == "stiffness":
-            weights = _section_weights(mesh, z, nodes, blade.ties)
+            weights = _section_weights(mesh, z, nodes, getattr(blade, "ties", None))
         elif section_weighting == "uniform":
             weights = None
         else:
@@ -851,6 +851,12 @@ def beam_section_properties(
                                  (float(x_sc + ref[0]), float(y_sc + ref[1])), float(m), centre, K6, K7, S_w)
 
 
+def _tie_caps(blade, bcs, mesh):
+    """``blade.tie_caps`` when the blade has it; a blade-like object without tied caps is left as is."""
+    tie = getattr(blade, "tie_caps", None)
+    return bcs if tie is None else tie(bcs, mesh)
+
+
 def _section_weights(mesh, z: float, nodes: Sequence[int], ties: Optional[Dict[int, int]] = None) -> List[float]:
     """Axial stiffness share of each section node: Et (= 1 / (A^-1)_11 along the beam axis)
     times its share of the element edges on the section (Simpson weights on quadratic edges).
@@ -910,7 +916,7 @@ def _fit_warping_stiffness(blade: BladeMesh, shear_centre, solver) -> Tuple[floa
     mesh = blade.mesh.copy()
     zs = np.asarray(blade.span_positions)
     z0 = float(zs[0])
-    bcs = blade.tie_caps(BoundaryConditions(), mesh).clamp(blade.nodes("root"))
+    bcs = _tie_caps(blade, BoundaryConditions(), mesh).clamp(blade.nodes("root"))
     refs = []
     for z in zs[1:]:
         r = add_reference_node(mesh, (shear_centre[0], shear_centre[1], float(z)))
