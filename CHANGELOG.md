@@ -22,14 +22,6 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- `BladeBuilder.from_geometry(..., caps="tied")` meshes each spar cap as a shell of
-  its own on its mid-surface, tied to the skin by rigid offset links
-  (`BladeMesh.ties`, added to the supports with `BladeMesh.tie_caps(bcs)`), as
-  blade-structure's section shell solver does. `beam_section_properties` applies the
-  links itself. Example 27 compares tied and merged caps.
-- Multi-point constraints may chain: a master that is itself the slave of another
-  constraint is substituted through (`BoundaryConditions.resolved_constraints`), in
-  the native solver and in the CalculiX and Nastran decks. A loop is an error.
 - `implicit_geometry_kernel` now holds a fork, with history, of blade-structure's
   implicit section geometry: `section_geometry` (signed-distance solids with CSG,
   40 structural layouts, wall midlines and cell-wall loops) with `section_contract`,

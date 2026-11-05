@@ -15,21 +15,6 @@ The shells lie where ``SectionCut.mid_surface()`` puts the walls, the same graph
   mid-surface, as a cap laid on a skin is;
 - webs between the skins' mid-surfaces, with normals towards the trailing edge.
 
-``caps="tied"`` keeps the spar caps as shells of their own instead, as a cap bonded to
-a skin is built: the skin runs on its own mid-surface under the cap, the cap lies on
-its own mid-surface inside it (half the skin and half the cap thickness in from the
-skin's), and each cap node is tied to the skin node facing it by a rigid offset link
-(RBE2). Webs then end on the skins' mid-surfaces, and a cap crossing a web is joined to
-it only through the skin. The links are ``BladeMesh.ties``; add them to the boundary
-conditions with ``blade.tie_caps(bcs)`` (an untied cap floats, and the solver stops on a
-singular stiffness). The cap nodes are left out of the ``root`` and ``tip`` node sets and
-of ``section_nodes``, since they follow the skin through the links, so supports and
-section links on those sets reach the caps without tying a node twice. This is the
-model blade-structure's section shell solver uses (its ``cap_tie_mode="skin_offset"``):
-each cap carries its own stresses, ply drops and element sets, and its edges end on
-the skin rather than stepping the skin's reference surface. ``ThinWalledSection.from_blade_mesh``
-(``anisotropic_section_model``) cannot read the links; use ``from_geometry`` there.
-
 Each wall run between junctions (where walls meet, or where a skin changes region or
 gains a cap) is one strip of elements along the span, with the same number of elements
 at every section, spaced equally along the wall. The section's topology must be the
@@ -46,9 +31,8 @@ the span. Skin and cap laminates must match the geometry's thickness (within
 Element sets: every wall label and region an element belongs to
 (``spar_cap_suction_surface``, ``skin_suction_surface:bay_0``,
 ``skin_suction_surface``, ``shear_web_0``, ...), ``skin`` (skins, including the capped
-parts), ``caps``, ``webs`` and ``all``. With ``caps="tied"`` the cap elements are in
-``caps`` and their cap's sets only, and the skin elements under them in the skin's.
-Node sets: ``root``, ``tip``, one per web, ``all``, and ``caps`` (the tied cap nodes).
+parts), ``caps``, ``webs`` and ``all``. Node sets: ``root``, ``tip``, one per web, and
+``all``.
 """
 
 from __future__ import annotations
@@ -114,48 +98,11 @@ def _edges(mid) -> List[Tuple[str, str, Tuple[str, ...], List[int]]]:
     return runs
 
 
-def _resample(points: np.ndarray, m: int, along: Optional[np.ndarray] = None) -> np.ndarray:
-    """m + 1 points equally spaced along a polyline, ends included.
-
-    With ``along`` (a polyline with the same number of vertices), the points are spaced
-    equally along ``along`` instead and placed at the same vertex parameter on
-    ``points``: a cap's nodes then face the skin nodes they are tied to.
-    """
-    ref = points if along is None else along
-    arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(ref, axis=0), axis=1))])
+def _resample(points: np.ndarray, m: int) -> np.ndarray:
+    """m + 1 points equally spaced along a polyline, ends included."""
+    arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(points, axis=0), axis=1))])
     u = np.linspace(0.0, arc[-1], m + 1)
-    v = np.interp(u, arc, np.arange(len(ref), dtype=float))
-    i = np.minimum(np.floor(v).astype(int), len(ref) - 2)
-    t = (v - i)[:, None]
-    return points[i] * (1.0 - t) + points[i + 1] * t
-
-
-def _cap_positions(cut, mid):
-    """Where the skins and caps lie when the caps are not merged into the skins.
-
-    Returns (skin points, cap points): the merged mid-surface's points with the skins
-    back on their own mid-surfaces, and, for every point of a capped run, the cap's
-    mid-surface point facing it (``None`` elsewhere). A merged point lies a fraction
-    t_cap / (t_cap + t_skin) of the way from the skin point to the cap point.
-    """
-    from dataclasses import replace
-
-    bare = replace(cut, walls=tuple(w for w in cut.walls if w.kind != "cap")).mid_surface()
-    if bare.points.shape != mid.points.shape:
-        raise RuntimeError("the geometry's mid-surface with and without caps numbers its points differently")
-    skin = bare.points
-    cap = np.full_like(skin, np.nan)
-    for seg in mid.segments:
-        if len(seg.layers) != 2:
-            continue
-        tc, ts = cut.wall(seg.layers[0]).thickness, cut.wall(seg.layers[1]).thickness
-        f = tc / (tc + ts)
-        for k in (seg.start, seg.end):
-            cap[k] = skin[k] + (mid.points[k] - skin[k]) / f
-    moved = np.linalg.norm(mid.points - skin, axis=1) > 0.0
-    if np.any(moved & np.isnan(cap[:, 0])):
-        raise RuntimeError("the geometry moved a mid-surface point that no capped run holds")
-    return skin, cap
+    return np.column_stack([np.interp(u, arc, points[:, 0]), np.interp(u, arc, points[:, 1])])
 
 
 class GeometryBladeBuilder:
@@ -180,20 +127,13 @@ class GeometryBladeBuilder:
     material_axis:
         The 0-degree ply direction, projected onto each element (the span axis by
         default).
-    caps:
-        ``"merged"`` (default) stacks each spar cap with its skin on one shell;
-        ``"tied"`` meshes it as a shell of its own on its mid-surface, tied to the skin
-        by rigid offset links (see the module notes).
     """
 
     def __init__(self, geometry, n_span: Union[int, Sequence[float]] = 10, element: str = "quad8_curved",
                  element_size: Optional[float] = None, wall_elements: Optional[Dict[str, int]] = None,
-                 material_axis=(0.0, 0.0, 1.0), caps: str = "merged"):
+                 material_axis=(0.0, 0.0, 1.0)):
         if element not in ("quad4", "quad8", "quad8_curved"):
             raise ValueError("element must be 'quad4', 'quad8' or 'quad8_curved'")
-        if caps not in ("merged", "tied"):
-            raise ValueError("caps must be 'merged' or 'tied'")
-        self.caps = caps
         self.geometry = geometry
         self.element = element
         self.material_axis = material_axis
@@ -249,16 +189,11 @@ class GeometryBladeBuilder:
         zs = self.z_nodes
         cuts = [self.cut(z) for z in zs]
         mids = [c.mid_surface() for c in cuts]
-        tied = self.caps == "tied"
-        if tied:
-            places = [_cap_positions(c, m) for c, m in zip(cuts, mids)]
-        else:
-            places = [(m.points, None) for m in mids]
 
         # topology from the first section, checked at every other one
         layout = None
         per_section = []
-        for z, mid, (skin_xy, cap_xy) in zip(zs, mids, places):
+        for z, mid in zip(zs, mids):
             runs = _edges(mid)
             count: Dict[Tuple[str, Tuple[str, ...]], int] = {}
             keyed = []
@@ -272,21 +207,18 @@ class GeometryBladeBuilder:
             for key, kind, pts in sorted(keyed, key=lambda r: r[0]):
                 for p in (pts[0], pts[-1]):
                     jid.setdefault(p, len(jid))
-                capped = cap_xy is not None and len(key[1]) > 1
-                edges.append((_Edge(key, kind, jid[pts[0]], jid[pts[-1]]), skin_xy[pts],
-                              cap_xy[pts] if capped else None))
-            topo = sorted((e.key, e.kind, e.start, e.end) for e, _, _ in edges)
+                edges.append((_Edge(key, kind, jid[pts[0]], jid[pts[-1]]), mid.points[pts]))
+            topo = sorted((e.key, e.kind, e.start, e.end) for e, _ in edges)
             if layout is None:
                 layout = topo
             elif topo != layout:
                 raise ValueError(f"the section at z = {z:g} has different walls from the one at z = {zs[0]:g} "
                                  f"(a web dropped or added?); mesh the two parts separately")
-            per_section.append({e.key: (e, xy, cxy) for e, xy, cxy in edges})
+            per_section.append({e.key: (e, xy) for e, xy in edges})
         keys = [k for k, _, _, _ in layout]
         counts = {}
         for key in keys:
-            longest = max(max(float(np.sum(np.linalg.norm(np.diff(xy, axis=0), axis=1)))
-                              for xy in sec[key][1:] if xy is not None) for sec in per_section)
+            longest = max(float(np.sum(np.linalg.norm(np.diff(sec[key][1], axis=0), axis=1))) for sec in per_section)
             counts[key] = self._count(cuts[0], key[1], longest) * step
 
         # nodes
@@ -294,16 +226,12 @@ class GeometryBladeBuilder:
         node = 1
         junction_node: Dict[Tuple[int, int], int] = {}
         grid: Dict[Tuple[Tuple, int, int], int] = {}
-        cap_grid: Dict[Tuple[Tuple, int, int], int] = {}
-        ties: Dict[int, int] = {}  # cap node -> skin node it is tied to
         for j, z in enumerate(zs):
             sec = per_section[j]
             for key in keys:
-                edge, xy, cxy = sec[key]
+                edge, xy = sec[key]
                 m = counts[key]
                 pts = _resample(xy, m)
-                if cxy is not None:
-                    cpts = _resample(cxy, m, along=xy)
                 for k in range(m + 1):
                     if quadratic and k % 2 and j % 2:
                         continue
@@ -317,11 +245,6 @@ class GeometryBladeBuilder:
                     else:
                         mesh.add_node(node, (pts[k, 0], pts[k, 1], float(z)))
                         grid[(key, k, j)] = node
-                        node += 1
-                    if cxy is not None:
-                        mesh.add_node(node, (cpts[k, 0], cpts[k, 1], float(z)))
-                        cap_grid[(key, k, j)] = node
-                        ties[node] = grid[(key, k, j)]
                         node += 1
 
         # laminates
@@ -363,36 +286,29 @@ class GeometryBladeBuilder:
         eid = 1
         nz = len(self.span_fractions) - 1
         kinds = {k: kind for k, kind, _, _ in layout}
-        def sets_of(name, layers):
-            return list(dict.fromkeys([name] + [v for label in layers for v in (label, label.split(":")[0])]))
-
         for key in keys:
             name, layers, _ = key
             m = counts[key]
-            separate = tied and len(layers) > 1
-            # (node grid, wall layers, element sets) of each shell along this run
-            shells = []
+            g = lambda a, b: grid[(key, a, b)]  # noqa: E731
+            sets = list(dict.fromkeys([name] + [v for label in layers for v in (label, label.split(":")[0])]))
             if kinds[key] == "web":
-                shells.append((grid, layers, sets_of(name, layers) + ["webs"]))
-            elif separate:
-                shells.append((grid, layers[1:], sets_of(layers[1], layers[1:]) + ["skin"]))
-                shells.append((cap_grid, layers[:1], sets_of(name, layers[:1]) + ["caps"]))
+                sets.append("webs")
             else:
-                shells.append((grid, layers, sets_of(name, layers) + ["skin"] + (["caps"] if len(layers) > 1 else [])))
-            for nodes_of, walls, sets in shells:
-                g = lambda a, b: nodes_of[(key, a, b)]  # noqa: E731
-                for jj in range(nz):
-                    j, d = step * jj, step
-                    lam = stack(walls, j, j + d)
-                    for kk in range(0, m, step):
-                        # corners along +z first, then along the wall: the normal is z x (wall direction)
-                        conn = [g(kk, j), g(kk, j + d), g(kk + d, j + d), g(kk + d, j)]
-                        if quadratic:
-                            conn += [g(kk, j + 1), g(kk + 1, j + d), g(kk + d, j + 1), g(kk + 1, j)]
-                        mesh.add_element(eid, conn, lam, kinematics, element_type=etype, **element_options)
-                        for sname in sets:
-                            elements.setdefault(sname, []).append(eid)
-                        eid += 1
+                sets.append("skin")
+                if len(layers) > 1:
+                    sets.append("caps")
+            for jj in range(nz):
+                j, d = step * jj, step
+                lam = stack(layers, j, j + d)
+                for kk in range(0, m, step):
+                    # corners along +z first, then along the wall: the normal is z x (wall direction)
+                    conn = [g(kk, j), g(kk, j + d), g(kk + d, j + d), g(kk + d, j)]
+                    if quadratic:
+                        conn += [g(kk, j + 1), g(kk + 1, j + d), g(kk + d, j + 1), g(kk + 1, j)]
+                    mesh.add_element(eid, conn, lam, kinematics, element_type=etype, **element_options)
+                    for sname in sets:
+                        elements.setdefault(sname, []).append(eid)
+                    eid += 1
             if kinds[key] == "web":
                 web_nodes.setdefault(name, [])
                 web_nodes[name].extend(v for (k2, _, _), v in grid.items() if k2 == key)
@@ -401,21 +317,19 @@ class GeometryBladeBuilder:
         z0, z1 = float(zs[0]), float(zs[-1])
         tol = 1e-12 * max(1.0, abs(z0), abs(z1))
         node_sets: Dict[str, List[int]] = {
-            "root": [n for n in all_nodes if abs(mesh.node_coordinates(n)[2] - z0) < tol and n not in ties],
-            "tip": [n for n in all_nodes if abs(mesh.node_coordinates(n)[2] - z1) < tol and n not in ties],
+            "root": [n for n in all_nodes if abs(mesh.node_coordinates(n)[2] - z0) < tol],
+            "tip": [n for n in all_nodes if abs(mesh.node_coordinates(n)[2] - z1) < tol],
             "all": all_nodes,
         }
-        if tied:
-            node_sets["caps"] = sorted(ties)
         node_sets.update({k: list(dict.fromkeys(v)) for k, v in web_nodes.items()})
         elements["all"] = mesh.element_ids
         sf = self.span_fractions
         return BladeMesh(mesh, node_sets, elements, tuple(self.geometry.stations), z0 + sf * (z1 - z0),
-                         geometry=self.geometry, ties=ties)
+                         geometry=self.geometry)
 
     def __repr__(self) -> str:
         return (f"GeometryBladeBuilder({self.geometry!r}, {len(self.span_fractions) - 1} elements along the span, "
-                f"{self.element}, caps {self.caps})")
+                f"{self.element})")
 
 
 __all__ = ["GeometryBladeBuilder"]

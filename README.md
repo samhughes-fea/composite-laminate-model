@@ -242,21 +242,6 @@ which also builds the thin-walled section from the same cut).
 The geometry has one skin thickness per section, so sandwich panels that differ from
 region to region still need the region-based builder.
 
-`caps="tied"` keeps each spar cap as a shell of its own on its own mid-surface, tied
-to the skin node facing it by a rigid offset link, as blade-structure's section shell
-solver models it. The cap then has its own elements, stresses and ply drops, and the
-skin runs unbroken beneath it. Add the links to the supports with `blade.tie_caps(bcs)`
-(`beam_section_properties` does this itself):
-
-```python
-blade = BladeBuilder.from_geometry(geo, n_span=12, caps="tied").build(laminates, FSDTModel())
-bcs = blade.tie_caps(BoundaryConditions()).clamp(blade.nodes("root"))
-```
-
-Tied and merged caps give the same EA and EI to 0.1% and GJ to 2%, and the tied cap
-takes the share of the axial and shear load that the stacked laminate gives it
-([example 27](examples/27_tied_spar_caps/)).
-
 ## Beam-section theory
 
 Torsion beyond Saint-Venant (restrained warping, the bimoment, GBT distortion and

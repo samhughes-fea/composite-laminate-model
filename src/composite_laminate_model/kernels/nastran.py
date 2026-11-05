@@ -223,7 +223,7 @@ class NastranDeckWriter:
                                    float(a1), float(a2), 0.0, s.Xt, s.Xc, s.Yt, s.Yc, s.S12])
 
         lines += self._spc_cards(bcs)
-        for c in bcs.resolved_constraints():
+        for c in bcs.constraints:
             if c.constant != 0.0:
                 raise UnsupportedFeatureError("Nastran MPC equations must be homogeneous")
             terms = [(c.slave, 1.0)] + [(k, -coef) for k, coef in c.masters]

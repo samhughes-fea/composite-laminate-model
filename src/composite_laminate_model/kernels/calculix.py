@@ -126,7 +126,7 @@ class CalculiXDeckWriter:
             lines.append("*BOUNDARY")
             for (node, dof), value in sorted(prescribed.items()):
                 lines.append(f"{node}, {dof + 1}, {dof + 1}, {value:.12g}")
-        for c in bcs.resolved_constraints():
+        for c in bcs.constraints:
             if c.constant != 0.0:
                 raise UnsupportedFeatureError("CalculiX *EQUATION constraints must be homogeneous")
             lines += ["*EQUATION", str(1 + len(c.masters))]

@@ -457,47 +457,6 @@ class BoundaryConditions:
     def constrained_keys(self) -> set:
         return set(self.prescribed) | {c.slave for c in self.constraints}
 
-    def resolved_constraints(self) -> List[LinearConstraint]:
-        """The constraints with no slave among the masters: chains substituted through.
-
-        A master that is itself the slave of another constraint (a spar cap tied to a
-        skin node that a rib link also drives, say) is replaced by that constraint's
-        masters, recursively, so the solver and the CalculiX and Nastran decks see
-        only independent masters. A DOF that is the slave of two constraints, or a
-        loop of constraints, is an error.
-        """
-        by_slave: Dict[DofKey, LinearConstraint] = {}
-        for c in self.constraints:
-            if c.slave in by_slave:
-                raise ValueError(f"DOF {c.slave} is the slave of more than one constraint")
-            by_slave[c.slave] = c
-        done: Dict[DofKey, Tuple[Dict[DofKey, float], float]] = {}
-
-        def expand(key: DofKey, path: frozenset) -> Tuple[Dict[DofKey, float], float]:
-            if key in done:
-                return done[key]
-            if key in path:
-                raise ValueError(f"the constraints on DOF {key} form a loop")
-            c = by_slave[key]
-            terms: Dict[DofKey, float] = {}
-            constant = c.constant
-            for m, coef in c.masters:
-                if m in by_slave:
-                    sub, sub_constant = expand(m, path | {key})
-                    constant += coef * sub_constant
-                    for k, v in sub.items():
-                        terms[k] = terms.get(k, 0.0) + coef * v
-                else:
-                    terms[m] = terms.get(m, 0.0) + coef
-            done[key] = (terms, constant)
-            return done[key]
-
-        out = []
-        for c in self.constraints:
-            terms, constant = expand(c.slave, frozenset())
-            out.append(LinearConstraint(c.slave, tuple(terms.items()), constant))
-        return out
-
     def numeric_prescribed(self) -> Dict[Tuple[int, int], float]:
         """Prescribed values on the six shell DOFs only (what external solver decks can express)."""
         return {k: v for k, v in self.prescribed.items() if not isinstance(k[1], EnrichedDOF)}
@@ -850,11 +809,12 @@ class ConstraintEliminator:
             for i in mesh.expand_dof(node, dof):
                 prescribed[i] = value
         slaves = {}
-        constraints = bcs.resolved_constraints()
-        for c in constraints:
+        for c in bcs.constraints:
             s = mesh.dof_index(*c.slave)
             if s in prescribed:
                 raise ValueError(f"DOF {c.slave} is both prescribed and a constraint slave")
+            if s in slaves:
+                raise ValueError(f"DOF {c.slave} is the slave of more than one constraint")
             slaves[s] = c
         for node in mesh.solid_only_nodes():  # rotations without stiffness
             for d in (3, 4, 5):
@@ -863,7 +823,7 @@ class ConstraintEliminator:
                     prescribed.setdefault(i, 0.0)
         free_nodes = mesh.element_free_nodes()
         if free_nodes:  # reference nodes: hold DOFs that no constraint or spring uses
-            used = {mesh.dof_index(*k) for c in constraints for k, _ in c.masters}
+            used = {mesh.dof_index(*k) for c in bcs.constraints for k, _ in c.masters}
             used |= {mesh.dof_index(*k) for k in bcs.springs}
             for node in free_nodes:
                 for d in range(mesh.node_dof_count(node)):
@@ -880,6 +840,8 @@ class ConstraintEliminator:
             g[s] += c.constant
             for key, coef in c.masters:
                 m = mesh.dof_index(*key)
+                if m in slaves:
+                    raise ValueError(f"Master DOF {key} is itself a constraint slave (chains are not supported)")
                 if m in prescribed:
                     g[s] += coef * prescribed[m]
                 else:
