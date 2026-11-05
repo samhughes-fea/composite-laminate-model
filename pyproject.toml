@@ -3,18 +3,18 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "composite-laminate-model"
+name = "laminate-constitutive-model"
 dynamic = ["version"]
-description = "Linear static analysis of composite blade structures: laminate mechanics, layered shell and solid FEA, failure criteria, ply knockdown damage and CalculiX/Nastran kernels."
+description = "Ply and laminate constitutive behaviour of composites: 3D orthotropic materials, laminates and ABD, CLPT/FSDT/zig-zag/layerwise section stiffness, hygrothermal resultants and failure criteria."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Sam Hughes" }]
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.22", "implicit-geometry-kernel>=0.1.0"]
+dependencies = ["numpy>=1.22"]
 keywords = [
-    "composites", "laminate", "finite element", "FEA", "shell", "wind turbine blade",
-    "classical laminate theory", "failure criteria", "CalculiX", "Nastran",
+    "composites", "laminate", "classical laminate theory", "ABD", "zig-zag theory",
+    "failure criteria", "Tsai-Wu", "Hashin", "orthotropic materials",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -29,22 +29,17 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-sparse = ["scipy>=1.8"]
-gmsh = ["gmsh>=4.11"]
-examples = ["scipy>=1.8", "matplotlib>=3.5", "gmsh>=4.11"]
-dev = ["scipy>=1.8", "pytest>=7", "gmsh>=4.11", "matplotlib>=3.5", "build>=1.0", "twine>=5"]
+examples = ["matplotlib>=3.5"]
+dev = ["pytest>=7", "matplotlib>=3.5", "build>=1.0", "twine>=5"]
 
 [project.urls]
-Homepage = "https://github.com/samhughes-fea/composite-laminate-model"
-Source = "https://github.com/samhughes-fea/composite-laminate-model"
-Issues = "https://github.com/samhughes-fea/composite-laminate-model/issues"
-Changelog = "https://github.com/samhughes-fea/composite-laminate-model/blob/main/CHANGELOG.md"
-
-[project.scripts]
-laminate-benchmarks = "composite_laminate_model.run_solver_benchmarks:cli"
+Homepage = "https://github.com/samhughes-fea/laminate-constitutive-model"
+Source = "https://github.com/samhughes-fea/laminate-constitutive-model"
+Issues = "https://github.com/samhughes-fea/laminate-constitutive-model/issues"
+Changelog = "https://github.com/samhughes-fea/laminate-constitutive-model/blob/main/CHANGELOG.md"
 
 [tool.setuptools.dynamic]
-version = { attr = "composite_laminate_model.__version__" }
+version = { attr = "laminate_constitutive_model.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

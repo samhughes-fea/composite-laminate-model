@@ -74,24 +74,3 @@ def save(fig, script: str, name: str) -> Path:
     plt.close(fig)
     print(f"wrote {path.relative_to(ROOT)}")
     return path
-
-
-def simply_supported(mesh, a, b, hard=True):
-    """w = 0 on every edge plus in-plane rigid-body restraint.
-
-    Hard supports also fix the tangential rotation and, for zig-zag and layerwise
-    models, the tangential enrichment amplitudes (the Navier / Pagano condition).
-    """
-    from composite_laminate_model import DOF, BoundaryConditions, EnrichedDOF
-
-    bcs = BoundaryConditions()
-    for n in mesh.nodes_on_line(0, 0.0) + mesh.nodes_on_line(0, a):
-        bcs.fix([n], [DOF.UZ] + ([DOF.RX, EnrichedDOF.Y] if hard else []))
-    for n in mesh.nodes_on_line(1, 0.0) + mesh.nodes_on_line(1, b):
-        bcs.fix([n], [DOF.UZ] + ([DOF.RY, EnrichedDOF.X] if hard else []))
-    bcs.fix([mesh.closest_node((0.0, 0.0))], [DOF.UX, DOF.UY])
-    bcs.fix([mesh.closest_node((a, 0.0))], [DOF.UY])
-    return bcs
-
-
-apply_style()
