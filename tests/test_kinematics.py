@@ -3,7 +3,7 @@ import pytest
 
 trapezoid = getattr(np, "trapezoid", None) or np.trapz
 
-from composite_laminate_model import (
+from laminate_constitutive_model import (
     CLPTModel,
     FSDTModel,
     Laminate,

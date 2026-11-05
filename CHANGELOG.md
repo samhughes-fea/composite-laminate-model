@@ -8,6 +8,25 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- **Split.** The repository is now laminate-constitutive-model, holding only the ply
+  and laminate behaviour (materials, plies, laminates and ABD, the kinematic
+  theories' section stiffness, hygrothermal resultants, failure criteria and
+  Pagano's solution). It depends on NumPy alone. The package is
+  `laminate_constitutive_model`; `composite_laminate_model` still imports, with a
+  `DeprecationWarning`, and re-exports it and its modules until the next minor
+  release.
+- The finite elements, solver, stress recovery, layups, progressive damage,
+  meshing, kernels, blade models and their tests and examples moved, with their
+  history, to [shell-fem](https://github.com/samhughes-fea/shell-fem). Examples 05
+  and 13 stay here as 01 (failure envelopes) and 02 (stiffness polars).
+
+### Removed
+
+- The dependency on implicit-geometry-kernel, the `sparse` and `gmsh` extras and
+  the `laminate-benchmarks` command (now shell-fem's).
+
+### Changed
+
 - The package is now `composite_laminate_model`, split out of composite-laminate-fea
   with its history. The implicit geometry is its own package,
   [implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel)

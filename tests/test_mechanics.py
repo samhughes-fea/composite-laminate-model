@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from composite_laminate_model import (
+from laminate_constitutive_model import (
     Laminate,
     Ply,
     q_bar_from_invariants,
